@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LevelsRouteImport } from './routes/levels'
 import { Route as HowToPlayRouteImport } from './routes/how-to-play'
 import { Route as EndlessRouteImport } from './routes/endless'
+import { Route as CustomizeRouteImport } from './routes/customize'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayLevelIdRouteImport } from './routes/play.$levelId'
 
@@ -30,6 +31,11 @@ const EndlessRoute = EndlessRouteImport.update({
   path: '/endless',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CustomizeRoute = CustomizeRouteImport.update({
+  id: '/customize',
+  path: '/customize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,6 +49,7 @@ const PlayLevelIdRoute = PlayLevelIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/customize': typeof CustomizeRoute
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/customize': typeof CustomizeRoute
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/customize': typeof CustomizeRoute
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
@@ -65,12 +74,25 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/endless' | '/how-to-play' | '/levels' | '/play/$levelId'
+  fullPaths:
+    | '/'
+    | '/customize'
+    | '/endless'
+    | '/how-to-play'
+    | '/levels'
+    | '/play/$levelId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/endless' | '/how-to-play' | '/levels' | '/play/$levelId'
+  to:
+    | '/'
+    | '/customize'
+    | '/endless'
+    | '/how-to-play'
+    | '/levels'
+    | '/play/$levelId'
   id:
     | '__root__'
     | '/'
+    | '/customize'
     | '/endless'
     | '/how-to-play'
     | '/levels'
@@ -79,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CustomizeRoute: typeof CustomizeRoute
   EndlessRoute: typeof EndlessRoute
   HowToPlayRoute: typeof HowToPlayRoute
   LevelsRoute: typeof LevelsRoute
@@ -108,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EndlessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/customize': {
+      id: '/customize'
+      path: '/customize'
+      fullPath: '/customize'
+      preLoaderRoute: typeof CustomizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -127,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CustomizeRoute: CustomizeRoute,
   EndlessRoute: EndlessRoute,
   HowToPlayRoute: HowToPlayRoute,
   LevelsRoute: LevelsRoute,
@@ -135,3 +166,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

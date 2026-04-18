@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 
-export function NeonHeader({ active }: { active?: "home" | "levels" | "endless" | "how" }) {
+export function NeonHeader({ active }: { active?: "home" | "levels" | "endless" | "how" | "customize" }) {
   const link = (label: string, to: string, key: string) => (
     <Link
       to={to}
@@ -25,6 +25,7 @@ export function NeonHeader({ active }: { active?: "home" | "levels" | "endless" 
         {link("Home", "/", "home")}
         {link("Levels", "/levels", "levels")}
         {link("Endless", "/endless", "endless")}
+        {link("Customize", "/customize", "customize")}
         {link("How to play", "/how-to-play", "how")}
       </nav>
       <Link to="/levels" className="md:hidden">

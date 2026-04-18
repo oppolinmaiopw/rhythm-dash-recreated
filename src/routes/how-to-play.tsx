@@ -33,15 +33,28 @@ function HowToPlay() {
         </p>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">
-          <Card title="Controls" lines={["Tap / Click — Jump", "Space / W / ↑ — Jump", "R — Restart instantly"]} />
+          <Card title="Controls" lines={["Tap / Click — Action", "Space / W / ↑ — Action", "Hold for ship/wave/robot", "R — Restart instantly"]} />
           <Card title="Obstacles" lines={["▲ Spikes — instant death", "■ Blocks — land on top, side hit kills", "▰ Platforms — float in midair"]} />
-          <Card title="Power-ups" lines={["Yellow pad — super jump", "🌀 Portal — flips gravity"]} />
-          <Card title="Tips" lines={["Listen to the beat — jumps usually align", "Hold-to-jump? No. Each tap = one jump", "Failure is part of the loop. Restart fast."]} />
+          <Card title="Power-ups" lines={["Yellow pad — super jump", "Mode portals — switch form mid-level", "Gravity portal (↕) — flip up/down"]} />
+          <Card
+            title="Game modes"
+            lines={[
+              "Cube (C) — tap to jump",
+              "Ship (S) — hold to fly up",
+              "Ball (B) — tap to swap gravity",
+              "UFO (U) — tap to flap",
+              "Wave (W) — hold = up, release = down",
+              "Robot (R) — tap to jump, hold higher",
+              "Spider (X) — tap to teleport surface",
+              "Swing (G) — tap to swap gravity midair",
+            ]}
+          />
         </div>
 
-        <div className="mt-10 flex gap-3">
+        <div className="mt-10 flex flex-wrap gap-3">
           <Link to="/levels"><Button size="lg" className="font-display uppercase tracking-widest">Pick a level</Button></Link>
-          <Link to="/endless"><Button size="lg" variant="secondary" className="font-display uppercase tracking-widest">Endless</Button></Link>
+          <Link to="/customize"><Button size="lg" variant="secondary" className="font-display uppercase tracking-widest">Customize icons</Button></Link>
+          <Link to="/endless"><Button size="lg" variant="ghost" className="font-display uppercase tracking-widest text-white">Endless</Button></Link>
         </div>
       </div>
     </div>
