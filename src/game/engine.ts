@@ -1,17 +1,36 @@
-// Geometry-style runner engine.
-// Pure functions + an internal state object driven by requestAnimationFrame from the React layer.
+// Geometry-style runner engine with multiple game modes.
+// Modes: cube (jump), ship (hold to thrust), ball (tap = swap gravity),
+// ufo (tap = flap), wave (hold = up / release = down), robot (hold = higher jump),
+// spider (tap = teleport to ceiling/floor), swing (tap = swap gravity mid-flight, copter-like).
 
 import type { LevelDef, Obstacle } from "./levels";
 import { generateEndlessObstacles } from "./levels";
 import { sfxCrash, sfxJump, sfxPad, sfxPortal } from "./audio";
+import {
+  drawIconPattern,
+  loadSkin,
+  type GameMode,
+  type PlayerSkin,
+} from "./icons";
 
 export const TILE = 40;
-export const GROUND_Y_TILES = 2; // ground sits 2 tiles above bottom of canvas
-export const PLAYER_SIZE = TILE; // 40px cube
-export const SCROLL_SPEED = 360; // px/sec
+export const GROUND_Y_TILES = 2;
+export const PLAYER_SIZE = TILE;
+export const SCROLL_SPEED = 360;
 export const GRAVITY = 2400;
 export const JUMP_VELOCITY = 880;
 export const PAD_VELOCITY = 1250;
+
+// Mode-specific constants
+const SHIP_THRUST = 3200;
+const SHIP_MAX_SPEED = 700;
+const UFO_FLAP = 700;
+const WAVE_SPEED = 520;
+const BALL_GRAVITY_MULT = 1.4;
+const ROBOT_JUMP = 760;
+const ROBOT_HOLD_BOOST = 1100; // extra upward accel while held in air
+const SPIDER_GRAVITY = 3000;
+const SWING_GRAVITY_MULT = 1.0;
 
 export interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number;
@@ -19,29 +38,33 @@ export interface Particle {
 
 export interface GameState {
   // World
-  scrollX: number;        // how far the world has moved (px)
-  obstacles: Obstacle[];  // sorted by x
+  scrollX: number;
+  obstacles: Obstacle[];
   endless: boolean;
   endlessChunksGenerated: number;
   // Player
-  px: number;             // fixed screen x of player (px)
-  py: number;             // world y of player center (px) — y grows downward
+  px: number;
+  py: number;
   vy: number;
   onGround: boolean;
-  gravityDir: 1 | -1;     // 1 = normal, -1 = flipped
+  gravityDir: 1 | -1;
   rotation: number;
+  mode: GameMode;
+  holding: boolean; // input held down (for ship/wave/robot)
+  // Wave trail
+  waveTrail: { x: number; y: number }[];
   // Meta
   alive: boolean;
   finished: boolean;
-  progress: number;       // 0..1 for normal levels
+  progress: number;
   attempts: number;
   particles: Particle[];
   level: LevelDef;
   width: number;
   height: number;
-  // Pad cooldown so we don't double-trigger
   lastPadTile: number;
   flashTime: number;
+  skin: PlayerSkin;
 }
 
 export function createGame(level: LevelDef, opts: { endless?: boolean; width: number; height: number }): GameState {
@@ -58,6 +81,9 @@ export function createGame(level: LevelDef, opts: { endless?: boolean; width: nu
     onGround: true,
     gravityDir: 1,
     rotation: 0,
+    mode: "cube",
+    holding: false,
+    waveTrail: [],
     alive: true,
     finished: false,
     progress: 0,
@@ -68,29 +94,84 @@ export function createGame(level: LevelDef, opts: { endless?: boolean; width: nu
     height: opts.height,
     lastPadTile: -1,
     flashTime: 0,
+    skin: loadSkin(),
   };
 }
 
-export function groundPx(h: number) {
-  return GROUND_Y_TILES * TILE + 0.0 * h; // ground line distance from bottom
+export function groundPx(_h: number) {
+  return GROUND_Y_TILES * TILE;
 }
 
 export function resize(state: GameState, w: number, h: number) {
   state.width = w;
   state.height = h;
   state.px = w * 0.28;
-  if (state.onGround && state.gravityDir === 1) {
+  if (state.onGround && state.gravityDir === 1 && state.mode === "cube") {
     state.py = h - groundPx(h) - PLAYER_SIZE / 2;
   }
 }
 
 export function jump(state: GameState) {
   if (!state.alive) return;
-  if (state.onGround) {
-    state.vy = -JUMP_VELOCITY * state.gravityDir;
-    state.onGround = false;
-    sfxJump();
+  switch (state.mode) {
+    case "cube": {
+      if (state.onGround) {
+        state.vy = -JUMP_VELOCITY * state.gravityDir;
+        state.onGround = false;
+        sfxJump();
+      }
+      break;
+    }
+    case "ufo": {
+      // Always flap
+      state.vy = -UFO_FLAP * state.gravityDir;
+      sfxJump();
+      break;
+    }
+    case "ball": {
+      // Swap gravity (only while on a surface)
+      if (state.onGround) {
+        state.gravityDir = state.gravityDir === 1 ? -1 : 1;
+        state.vy = 0;
+        state.onGround = false;
+        sfxJump();
+      }
+      break;
+    }
+    case "spider": {
+      // Teleport to opposite surface instantly
+      if (state.onGround) {
+        state.gravityDir = state.gravityDir === 1 ? -1 : 1;
+        state.vy = 0;
+        sfxPortal();
+      }
+      break;
+    }
+    case "swing": {
+      // Swap gravity in mid-air freely
+      state.gravityDir = state.gravityDir === 1 ? -1 : 1;
+      state.vy = 0;
+      sfxJump();
+      break;
+    }
+    case "robot": {
+      if (state.onGround) {
+        state.vy = -ROBOT_JUMP * state.gravityDir;
+        state.onGround = false;
+        sfxJump();
+      }
+      break;
+    }
+    // ship & wave: handled by holding flag, but a tap also triggers a small effect
+    case "ship":
+    case "wave":
+      sfxJump();
+      break;
   }
+}
+
+export function setHolding(state: GameState, holding: boolean) {
+  state.holding = holding;
 }
 
 function spawnParticles(state: GameState, x: number, y: number, color: string, count = 24) {
@@ -107,18 +188,6 @@ function spawnParticles(state: GameState, x: number, y: number, color: string, c
       size: 3 + Math.random() * 4,
     });
   }
-}
-
-function getPlayerAabb(state: GameState) {
-  const half = PLAYER_SIZE / 2;
-  // Slightly inset hitbox for fairness
-  const inset = 4;
-  return {
-    left: state.px - half + inset,
-    right: state.px + half - inset,
-    top: state.py - half + inset,
-    bottom: state.py + half - inset,
-  };
 }
 
 interface ObstacleRect {
@@ -185,10 +254,18 @@ function obstacleRects(state: GameState): ObstacleRect[] {
         });
         break;
       }
-      case "portal-grav": {
+      case "portal-grav":
+      case "portal-cube":
+      case "portal-ship":
+      case "portal-ball":
+      case "portal-ufo":
+      case "portal-wave":
+      case "portal-robot":
+      case "portal-spider":
+      case "portal-swing": {
         rects.push({
           left: ox + 8, right: ox + TILE - 8,
-          top: groundTop - TILE * 3, bottom: groundTop,
+          top: 0, bottom: groundTop,
           lethal: false, landable: false, obstacle: o,
         });
         break;
@@ -202,10 +279,69 @@ function aabbOverlap(a: { left: number; right: number; top: number; bottom: numb
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
+function modeFromPortal(type: Obstacle["type"]): GameMode | null {
+  switch (type) {
+    case "portal-cube":   return "cube";
+    case "portal-ship":   return "ship";
+    case "portal-ball":   return "ball";
+    case "portal-ufo":    return "ufo";
+    case "portal-wave":   return "wave";
+    case "portal-robot":  return "robot";
+    case "portal-spider": return "spider";
+    case "portal-swing":  return "swing";
+    default: return null;
+  }
+}
+
+function applyModePhysics(state: GameState, dt: number) {
+  switch (state.mode) {
+    case "cube":
+    case "robot": {
+      let g = GRAVITY;
+      if (state.mode === "robot" && state.holding && !state.onGround && state.vy * state.gravityDir < 0) {
+        // While holding & moving up, reduce effective gravity for higher jump
+        g -= ROBOT_HOLD_BOOST;
+      }
+      state.vy += g * state.gravityDir * dt;
+      break;
+    }
+    case "ball": {
+      state.vy += GRAVITY * BALL_GRAVITY_MULT * state.gravityDir * dt;
+      break;
+    }
+    case "spider": {
+      state.vy += SPIDER_GRAVITY * state.gravityDir * dt;
+      break;
+    }
+    case "ship": {
+      // hold = thrust opposite gravity
+      const dir = state.holding ? -state.gravityDir : state.gravityDir;
+      state.vy += SHIP_THRUST * dir * dt;
+      // clamp
+      if (state.vy > SHIP_MAX_SPEED) state.vy = SHIP_MAX_SPEED;
+      if (state.vy < -SHIP_MAX_SPEED) state.vy = -SHIP_MAX_SPEED;
+      break;
+    }
+    case "ufo": {
+      state.vy += GRAVITY * 0.85 * state.gravityDir * dt;
+      break;
+    }
+    case "wave": {
+      // diagonal: vy = ±WAVE_SPEED based on holding
+      state.vy = state.holding ? -WAVE_SPEED * state.gravityDir : WAVE_SPEED * state.gravityDir;
+      break;
+    }
+    case "swing": {
+      state.vy += GRAVITY * SWING_GRAVITY_MULT * state.gravityDir * dt;
+      break;
+    }
+  }
+  state.py += state.vy * dt;
+}
+
 export function update(state: GameState, dt: number) {
   if (!state.alive || state.finished) return;
 
-  // Scroll & progress
   state.scrollX += SCROLL_SPEED * dt;
   if (!state.endless) {
     const totalPx = state.level.length * TILE;
@@ -215,7 +351,6 @@ export function update(state: GameState, dt: number) {
       return;
     }
   } else {
-    // Generate more endless obstacles when the scroll approaches the end of generated content
     const generatedEnd = state.endlessChunksGenerated * 24 * TILE;
     if (state.scrollX + state.width * 2 > generatedEnd) {
       const more = generateEndlessObstacles(Math.floor(Math.random() * 1e6) + state.endlessChunksGenerated, 8);
@@ -225,14 +360,11 @@ export function update(state: GameState, dt: number) {
     }
   }
 
-  // Physics
-  state.vy += GRAVITY * state.gravityDir * dt;
-  state.py += state.vy * dt;
+  applyModePhysics(state, dt);
 
   const groundTop = state.height - groundPx(state.height);
   const ceilingTop = 0;
 
-  // World x of player based on scroll
   const playerWorldX = state.scrollX + state.px;
   const aabb = {
     left: playerWorldX - PLAYER_SIZE / 2 + 4,
@@ -241,27 +373,59 @@ export function update(state: GameState, dt: number) {
     bottom: state.py + PLAYER_SIZE / 2 - 4,
   };
 
-  // Ground / ceiling collision
+  // Ground / ceiling collisions
   let landed = false;
-  if (state.gravityDir === 1) {
-    if (aabb.bottom >= groundTop) {
-      state.py = groundTop - PLAYER_SIZE / 2 + 4;
+  if (aabb.bottom >= groundTop) {
+    state.py = groundTop - PLAYER_SIZE / 2 + 4;
+    if (state.gravityDir === 1) {
+      state.vy = 0;
+      landed = true;
+    } else {
+      // Hit floor while gravity inverted: depends on mode
+      if (state.mode === "ship" || state.mode === "ufo" || state.mode === "wave" || state.mode === "swing") {
+        die(state); return;
+      }
       state.vy = 0;
       landed = true;
     }
-  } else {
-    if (aabb.top <= ceilingTop) {
-      state.py = ceilingTop + PLAYER_SIZE / 2 - 4;
+  }
+  if (aabb.top <= ceilingTop) {
+    state.py = ceilingTop + PLAYER_SIZE / 2 - 4;
+    if (state.gravityDir === -1) {
+      state.vy = 0;
+      landed = true;
+    } else {
+      if (state.mode === "ship" || state.mode === "ufo" || state.mode === "wave" || state.mode === "swing") {
+        die(state); return;
+      }
       state.vy = 0;
       landed = true;
     }
   }
 
-  // Obstacle interactions
+  // Obstacles
   const rects = obstacleRects(state);
   for (const r of rects) {
     if (!aabbOverlap(aabb, r)) continue;
 
+    // Mode portals
+    const newMode = modeFromPortal(r.obstacle.type);
+    if (newMode) {
+      if (state.mode !== newMode) {
+        state.mode = newMode;
+        state.vy = 0;
+        // If switching to ground-based mode while in air, do NOT snap — let them fall
+        sfxPortal();
+        spawnParticles(state, state.px, state.py, "#a78bfa", 30);
+      }
+      continue;
+    }
+    if (r.obstacle.type === "portal-grav") {
+      state.gravityDir = state.gravityDir === 1 ? -1 : 1;
+      state.vy = 0;
+      sfxPortal();
+      continue;
+    }
     if (r.obstacle.type === "pad") {
       if (state.lastPadTile !== r.obstacle.x) {
         state.vy = -PAD_VELOCITY * state.gravityDir;
@@ -272,22 +436,14 @@ export function update(state: GameState, dt: number) {
       }
       continue;
     }
-    if (r.obstacle.type === "portal-grav") {
-      state.gravityDir = state.gravityDir === 1 ? -1 : 1;
-      state.vy = 0;
-      sfxPortal();
-      continue;
-    }
     if (r.lethal) {
       die(state);
       return;
     }
     if (r.landable) {
-      // Determine if landing on top vs side hit
       const prevBottom = aabb.bottom - state.vy * dt;
       const prevTop = aabb.top - state.vy * dt;
       if (state.gravityDir === 1 && prevBottom <= r.top + 2 && state.vy >= 0) {
-        // landed on top
         state.py = r.top - PLAYER_SIZE / 2 + 4;
         state.vy = 0;
         landed = true;
@@ -304,12 +460,31 @@ export function update(state: GameState, dt: number) {
 
   state.onGround = landed;
 
-  // Rotation: smooth in air, snap on landing
-  if (state.onGround) {
-    const target = Math.round(state.rotation / (Math.PI / 2)) * (Math.PI / 2);
-    state.rotation += (target - state.rotation) * Math.min(1, dt * 18);
-  } else {
-    state.rotation += dt * 7 * state.gravityDir;
+  // Rotation
+  if (state.mode === "cube" || state.mode === "robot") {
+    if (state.onGround) {
+      const target = Math.round(state.rotation / (Math.PI / 2)) * (Math.PI / 2);
+      state.rotation += (target - state.rotation) * Math.min(1, dt * 18);
+    } else {
+      state.rotation += dt * 7 * state.gravityDir;
+    }
+  } else if (state.mode === "ship" || state.mode === "wave") {
+    // Tilt based on vy
+    const target = Math.max(-0.6, Math.min(0.6, state.vy / 800));
+    state.rotation += (target - state.rotation) * Math.min(1, dt * 14);
+  } else if (state.mode === "ball" || state.mode === "spider" || state.mode === "swing") {
+    state.rotation += dt * 8 * state.gravityDir;
+  } else if (state.mode === "ufo") {
+    const target = Math.max(-0.3, Math.min(0.3, state.vy / 1200));
+    state.rotation += (target - state.rotation) * Math.min(1, dt * 12);
+  }
+
+  // Wave trail
+  if (state.mode === "wave") {
+    state.waveTrail.push({ x: state.scrollX + state.px, y: state.py });
+    if (state.waveTrail.length > 80) state.waveTrail.shift();
+  } else if (state.waveTrail.length) {
+    state.waveTrail.length = 0;
   }
 
   // Particles
@@ -322,13 +497,13 @@ export function update(state: GameState, dt: number) {
   state.particles = state.particles.filter((p) => p.life < p.max);
 
   // Trail
-  if (state.alive && Math.random() < 0.6) {
+  if (state.alive && state.mode !== "wave" && Math.random() < 0.6) {
     state.particles.push({
-      x: state.px - PLAYER_SIZE / 2,
+      x: state.px - PLAYER_SIZE / 2 + state.scrollX,
       y: state.py + (state.gravityDir === 1 ? PLAYER_SIZE / 4 : -PLAYER_SIZE / 4),
       vx: -60, vy: 0,
       life: 0, max: 0.4,
-      color: "rgba(236, 72, 153, 0.8)",
+      color: state.skin.glow + "cc",
       size: 4,
     });
   }
@@ -339,7 +514,7 @@ export function update(state: GameState, dt: number) {
 function die(state: GameState) {
   state.alive = false;
   state.flashTime = 0.25;
-  spawnParticles(state, state.px, state.py, "#f472b6", 50);
+  spawnParticles(state, state.px, state.py, state.skin.glow, 50);
   sfxCrash();
 }
 
@@ -349,7 +524,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   const groundTop = h - groundPx(h);
   ctx.clearRect(0, 0, w, h);
 
-  // Parallax grid background
   drawGridBackground(ctx, state, accent);
 
   // Ground
@@ -359,7 +533,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   ctx.fillStyle = grad;
   ctx.fillRect(0, groundTop, w, h - groundTop);
 
-  // Top "ceiling" strip when gravity is flipped to give visual cue
+  // Ceiling strip
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.fillRect(0, 0, w, 10);
 
@@ -373,6 +547,22 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   ctx.lineTo(w, groundTop);
   ctx.stroke();
   ctx.shadowBlur = 0;
+
+  // Wave trail
+  if (state.mode === "wave" && state.waveTrail.length > 1) {
+    ctx.strokeStyle = state.skin.glow;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = state.skin.glow;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    for (let i = 0; i < state.waveTrail.length; i++) {
+      const p = state.waveTrail[i];
+      const sx = p.x - state.scrollX;
+      if (i === 0) ctx.moveTo(sx, p.y); else ctx.lineTo(sx, p.y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
 
   // Obstacles
   const rects = obstacleRects(state);
@@ -407,7 +597,6 @@ function drawGridBackground(ctx: CanvasRenderingContext2D, state: GameState, acc
   const h = state.height;
   const groundTop = h - groundPx(state.height);
 
-  // Floor grid (perspective-ish horizontal lines)
   ctx.strokeStyle = `${accent}33`;
   ctx.lineWidth = 1;
   const offset = state.scrollX % TILE;
@@ -424,7 +613,6 @@ function drawGridBackground(ctx: CanvasRenderingContext2D, state: GameState, acc
     ctx.stroke();
   }
 
-  // Sky grid (slower parallax)
   ctx.strokeStyle = `${accent}1a`;
   const skyOffset = (state.scrollX * 0.3) % (TILE * 2);
   for (let x = -skyOffset; x < w; x += TILE * 2) {
@@ -441,6 +629,21 @@ function drawGridBackground(ctx: CanvasRenderingContext2D, state: GameState, acc
   }
 }
 
+function portalColors(type: string): { ring: string; label: string } {
+  switch (type) {
+    case "portal-cube":   return { ring: "#f472b6", label: "C" };
+    case "portal-ship":   return { ring: "#fb923c", label: "S" };
+    case "portal-ball":   return { ring: "#fde047", label: "B" };
+    case "portal-ufo":    return { ring: "#22d3ee", label: "U" };
+    case "portal-wave":   return { ring: "#a78bfa", label: "W" };
+    case "portal-robot":  return { ring: "#34d399", label: "R" };
+    case "portal-spider": return { ring: "#f87171", label: "X" };
+    case "portal-swing":  return { ring: "#e879f9", label: "G" };
+    case "portal-grav":   return { ring: "#a78bfa", label: "↕" };
+    default:              return { ring: "#fff", label: "" };
+  }
+}
+
 function drawObstacle(
   ctx: CanvasRenderingContext2D,
   type: string,
@@ -451,7 +654,6 @@ function drawObstacle(
   switch (type) {
     case "spike":
     case "spike3": {
-      // For spike3, drawObstacle is called per-spike already.
       ctx.fillStyle = "#fff";
       ctx.shadowColor = accent;
       ctx.shadowBlur = 16;
@@ -497,7 +699,6 @@ function drawObstacle(
       ctx.beginPath();
       ctx.ellipse(x + w / 2, y + h - 2, w / 2, 6, 0, 0, Math.PI * 2);
       ctx.fill();
-      // arrows
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -507,16 +708,27 @@ function drawObstacle(
       ctx.stroke();
       break;
     }
-    case "portal-grav": {
-      ctx.fillStyle = "rgba(255,255,255,0.1)";
-      ctx.strokeStyle = "#a78bfa";
-      ctx.shadowColor = "#a78bfa";
+    default: {
+      // Portals (mode + grav). All drawn as a vertical pill with a label.
+      const { ring, label } = portalColors(type);
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.strokeStyle = ring;
+      ctx.shadowColor = ring;
       ctx.shadowBlur = 22;
       ctx.lineWidth = 3;
+      const cx = x + w / 2;
+      const rx = w / 2 + 2;
+      const ry = h / 2;
       ctx.beginPath();
-      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, y + ry, rx, ry, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 16px 'Russo One', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, cx, y + ry);
       break;
     }
   }
@@ -528,30 +740,201 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.translate(state.px, state.py);
   ctx.rotate(state.rotation);
   const s = PLAYER_SIZE;
+  const skin = state.skin;
+  const pattern = skin.icons[state.mode] ?? 0;
 
-  // Glow
-  ctx.shadowColor = "#ec4899";
+  ctx.shadowColor = skin.glow;
   ctx.shadowBlur = 28;
 
-  // Body
+  switch (state.mode) {
+    case "cube":
+    case "robot": {
+      drawCubeBody(ctx, s, skin);
+      drawIconPattern(ctx, pattern, s, skin);
+      if (state.mode === "robot") {
+        // Little legs
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = skin.secondary;
+        ctx.fillRect(-s / 2 + 4, s / 2 - 2, 8, 6);
+        ctx.fillRect(s / 2 - 12, s / 2 - 2, 8, 6);
+      }
+      break;
+    }
+    case "ship": {
+      drawShipBody(ctx, s, skin);
+      ctx.save();
+      ctx.scale(0.7, 0.7);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
+      break;
+    }
+    case "ball": {
+      drawBallBody(ctx, s, skin);
+      ctx.save();
+      ctx.scale(0.85, 0.85);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
+      break;
+    }
+    case "ufo": {
+      drawUfoBody(ctx, s, skin);
+      ctx.save();
+      ctx.translate(0, -2);
+      ctx.scale(0.6, 0.6);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
+      break;
+    }
+    case "wave": {
+      drawWaveBody(ctx, s, skin);
+      break;
+    }
+    case "spider": {
+      drawSpiderBody(ctx, s, skin);
+      ctx.save();
+      ctx.scale(0.8, 0.8);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
+      break;
+    }
+    case "swing": {
+      drawSwingBody(ctx, s, skin);
+      ctx.save();
+      ctx.scale(0.75, 0.75);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
+      break;
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawCubeBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
   const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
-  grad.addColorStop(0, "#f472b6");
-  grad.addColorStop(1, "#a855f7");
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
   ctx.fillStyle = grad;
   ctx.fillRect(-s / 2, -s / 2, s, s);
-
   ctx.shadowBlur = 0;
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 2;
   ctx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
+}
 
-  // Inner detail (face-ish)
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
-  ctx.fillRect(-s / 2 + 8, -s / 2 + 10, 6, 6);
-  ctx.fillRect(s / 2 - 14, -s / 2 + 10, 6, 6);
-  ctx.fillRect(-s / 2 + 10, s / 2 - 14, s - 20, 4);
+function drawShipBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  // Body: rounded triangle pointing right
+  const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(s / 2, 0);
+  ctx.lineTo(-s / 2, -s / 2 + 4);
+  ctx.lineTo(-s / 2 + 8, 0);
+  ctx.lineTo(-s / 2, s / 2 - 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Cockpit
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.beginPath();
+  ctx.ellipse(2, -2, 8, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
 
-  ctx.restore();
+function drawBallBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  const grad = ctx.createRadialGradient(-s / 6, -s / 6, 2, 0, 0, s / 2);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, s / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawUfoBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  // Dome on top, disc below
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.beginPath();
+  ctx.ellipse(0, -4, s / 2 - 8, s / 2 - 8, 0, Math.PI, 0);
+  ctx.fill();
+  const grad = ctx.createLinearGradient(0, 0, 0, s / 2);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(0, 4, s / 2, s / 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawWaveBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  const grad = ctx.createLinearGradient(-s / 2, 0, s / 2, 0);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, -s / 3);
+  ctx.lineTo(s / 3, 0);
+  ctx.lineTo(0, s / 3);
+  ctx.lineTo(-s / 3, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawSpiderBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  drawCubeBody(ctx, s * 0.85, skin);
+  // 4 little legs
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = skin.secondary;
+  ctx.lineWidth = 2;
+  for (let i = -1; i <= 1; i += 2) {
+    ctx.beginPath();
+    ctx.moveTo(i * s / 2.4, -s / 4);
+    ctx.lineTo(i * s / 1.7, -s / 2);
+    ctx.moveTo(i * s / 2.4, s / 4);
+    ctx.lineTo(i * s / 1.7, s / 2);
+    ctx.stroke();
+  }
+}
+
+function drawSwingBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  // Two stacked triangles (top + bottom)
+  const grad = ctx.createLinearGradient(0, -s / 2, 0, s / 2);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(-s / 2, -2);
+  ctx.lineTo(s / 2, -2);
+  ctx.lineTo(0, -s / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-s / 2, 2);
+  ctx.lineTo(s / 2, 2);
+  ctx.lineTo(0, s / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
 }
 
 export function reset(state: GameState) {
