@@ -62,6 +62,11 @@ function Home() {
                     Endless mode
                   </Button>
                 </Link>
+                <Link to="/customize">
+                  <Button size="lg" variant="outline" className="font-display uppercase tracking-widest border-white/30 text-white hover:bg-white/10">
+                    Customize
+                  </Button>
+                </Link>
                 <Link to="/how-to-play">
                   <Button size="lg" variant="ghost" className="font-display uppercase tracking-widest text-white">
                     How to play
