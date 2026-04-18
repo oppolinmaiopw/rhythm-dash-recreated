@@ -6,6 +6,7 @@ import {
   render,
   reset,
   resize,
+  setHolding,
   update,
   type GameState,
 } from "@/game/engine";
@@ -125,8 +126,9 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
 
       const wasAlive = state.alive;
       const wasFinished = state.finished;
+      const prevMode = state.mode;
       update(state, dt);
-      if ((wasAlive && !state.alive) || (!wasFinished && state.finished)) {
+      if ((wasAlive && !state.alive) || (!wasFinished && state.finished) || prevMode !== state.mode) {
         saveBest(state);
         setTick((x) => x + 1);
       }
@@ -143,7 +145,7 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
 
   // Input
   useEffect(() => {
-    const onJump = () => {
+    const onPress = () => {
       unlockAudio();
       const s = stateRef.current;
       if (!s) return;
@@ -152,12 +154,19 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
         setTick((x) => x + 1);
         return;
       }
+      setHolding(s, true);
       jump(s);
     };
-    const onKey = (e: KeyboardEvent) => {
+    const onRelease = () => {
+      const s = stateRef.current;
+      if (!s) return;
+      setHolding(s, false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+        if (e.repeat) return;
         e.preventDefault();
-        onJump();
+        onPress();
       }
       if (e.code === "KeyR") {
         const s = stateRef.current;
@@ -167,16 +176,26 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
         }
       }
     };
-    const canvas = canvasRef.current;
-    const onPointer = (e: PointerEvent) => {
-      e.preventDefault();
-      onJump();
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+        e.preventDefault();
+        onRelease();
+      }
     };
-    window.addEventListener("keydown", onKey);
-    canvas?.addEventListener("pointerdown", onPointer);
+    const canvas = canvasRef.current;
+    const onPointerDown = (e: PointerEvent) => { e.preventDefault(); onPress(); };
+    const onPointerUp = (e: PointerEvent) => { e.preventDefault(); onRelease(); };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    canvas?.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     return () => {
-      window.removeEventListener("keydown", onKey);
-      canvas?.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      canvas?.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
     };
   }, []);
 
@@ -213,6 +232,11 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
         <div className="text-right font-display">
           <div className="text-xs uppercase tracking-widest text-white/70">{level.difficulty}</div>
           <div className="text-lg text-white text-glow-pink md:text-2xl">{level.name}</div>
+          {state && (
+            <div className="mt-1 text-xs uppercase tracking-widest text-neon-cyan text-glow-cyan">
+              Mode: {state.mode}
+            </div>
+          )}
         </div>
       </div>
 
@@ -272,7 +296,7 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
 
       {/* Bottom hint */}
       <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 text-center text-xs text-white/70 md:text-sm">
-        Tap / Space to jump · R to restart
+        {state ? modeHint(state.mode) : "Tap / Space"} · R to restart
       </div>
     </div>
   );
@@ -321,10 +345,23 @@ function Overlay({
 }
 
 function getAccentColor(cssVar: string): string {
-  // Resolve a CSS variable string to a usable color.
   if (typeof window === "undefined") return "#ec4899";
   const m = cssVar.match(/var\((--[^)]+)\)/);
   if (!m) return cssVar;
   const v = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
   return v || "#ec4899";
+}
+
+function modeHint(mode: string): string {
+  switch (mode) {
+    case "cube":   return "Tap to jump";
+    case "ship":   return "Hold to fly up · release to fall";
+    case "ball":   return "Tap to swap gravity (on surface)";
+    case "ufo":    return "Tap to flap";
+    case "wave":   return "Hold = up · release = down";
+    case "robot":  return "Tap to jump · hold for higher jump";
+    case "spider": return "Tap to teleport between floor/ceiling";
+    case "swing":  return "Tap to swap gravity mid-air";
+    default:       return "Tap to jump";
+  }
 }
