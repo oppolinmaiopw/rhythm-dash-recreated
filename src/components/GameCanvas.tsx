@@ -231,6 +231,11 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
         <div className="text-right font-display">
           <div className="text-xs uppercase tracking-widest text-white/70">{level.difficulty}</div>
           <div className="text-lg text-white text-glow-pink md:text-2xl">{level.name}</div>
+          {state && (
+            <div className="mt-1 text-xs uppercase tracking-widest text-neon-cyan text-glow-cyan">
+              Mode: {state.mode}
+            </div>
+          )}
         </div>
       </div>
 
@@ -290,7 +295,7 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
 
       {/* Bottom hint */}
       <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 text-center text-xs text-white/70 md:text-sm">
-        Tap / Space to jump · R to restart
+        {state ? modeHint(state.mode) : "Tap / Space"} · R to restart
       </div>
     </div>
   );
