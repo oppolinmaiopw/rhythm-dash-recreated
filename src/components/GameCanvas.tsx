@@ -126,8 +126,9 @@ export function GameCanvas({ level, endless = false }: GameCanvasProps) {
 
       const wasAlive = state.alive;
       const wasFinished = state.finished;
+      const prevMode = state.mode;
       update(state, dt);
-      if ((wasAlive && !state.alive) || (!wasFinished && state.finished)) {
+      if ((wasAlive && !state.alive) || (!wasFinished && state.finished) || prevMode !== state.mode) {
         saveBest(state);
         setTick((x) => x + 1);
       }
@@ -344,10 +345,23 @@ function Overlay({
 }
 
 function getAccentColor(cssVar: string): string {
-  // Resolve a CSS variable string to a usable color.
   if (typeof window === "undefined") return "#ec4899";
   const m = cssVar.match(/var\((--[^)]+)\)/);
   if (!m) return cssVar;
   const v = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
   return v || "#ec4899";
+}
+
+function modeHint(mode: string): string {
+  switch (mode) {
+    case "cube":   return "Tap to jump";
+    case "ship":   return "Hold to fly up · release to fall";
+    case "ball":   return "Tap to swap gravity (on surface)";
+    case "ufo":    return "Tap to flap";
+    case "wave":   return "Hold = up · release = down";
+    case "robot":  return "Tap to jump · hold for higher jump";
+    case "spider": return "Tap to teleport between floor/ceiling";
+    case "swing":  return "Tap to swap gravity mid-air";
+    default:       return "Tap to jump";
+  }
 }
