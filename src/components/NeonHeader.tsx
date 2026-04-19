@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 
-export function NeonHeader({ active }: { active?: "home" | "levels" | "endless" | "how" | "customize" }) {
+export function NeonHeader({ active }: { active?: "home" | "levels" | "endless" | "how" | "customize" | "editor" | "community" }) {
   const link = (label: string, to: string, key: string) => (
     <Link
       to={to}
@@ -21,10 +21,12 @@ export function NeonHeader({ active }: { active?: "home" | "levels" | "endless" 
           Cubefall
         </span>
       </Link>
-      <nav className="hidden items-center gap-6 md:flex">
+      <nav className="hidden items-center gap-5 md:flex">
         {link("Home", "/", "home")}
         {link("Levels", "/levels", "levels")}
         {link("Endless", "/endless", "endless")}
+        {link("Editor", "/editor", "editor")}
+        {link("Community", "/community", "community")}
         {link("Customize", "/customize", "customize")}
         {link("How to play", "/how-to-play", "how")}
       </nav>

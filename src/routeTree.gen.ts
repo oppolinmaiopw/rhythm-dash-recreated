@@ -12,9 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LevelsRouteImport } from './routes/levels'
 import { Route as HowToPlayRouteImport } from './routes/how-to-play'
 import { Route as EndlessRouteImport } from './routes/endless'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as CustomizeRouteImport } from './routes/customize'
+import { Route as CommunityRouteImport } from './routes/community'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayLevelIdRouteImport } from './routes/play.$levelId'
+import { Route as CommunityLevelIdRouteImport } from './routes/community.$levelId'
 
 const LevelsRoute = LevelsRouteImport.update({
   id: '/levels',
@@ -31,9 +34,19 @@ const EndlessRoute = EndlessRouteImport.update({
   path: '/endless',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CustomizeRoute = CustomizeRouteImport.update({
   id: '/customize',
   path: '/customize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityRoute = CommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -46,62 +59,87 @@ const PlayLevelIdRoute = PlayLevelIdRouteImport.update({
   path: '/play/$levelId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommunityLevelIdRoute = CommunityLevelIdRouteImport.update({
+  id: '/$levelId',
+  path: '/$levelId',
+  getParentRoute: () => CommunityRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/community': typeof CommunityRouteWithChildren
   '/customize': typeof CustomizeRoute
+  '/editor': typeof EditorRoute
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
+  '/community/$levelId': typeof CommunityLevelIdRoute
   '/play/$levelId': typeof PlayLevelIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/community': typeof CommunityRouteWithChildren
   '/customize': typeof CustomizeRoute
+  '/editor': typeof EditorRoute
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
+  '/community/$levelId': typeof CommunityLevelIdRoute
   '/play/$levelId': typeof PlayLevelIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/community': typeof CommunityRouteWithChildren
   '/customize': typeof CustomizeRoute
+  '/editor': typeof EditorRoute
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
+  '/community/$levelId': typeof CommunityLevelIdRoute
   '/play/$levelId': typeof PlayLevelIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/community'
     | '/customize'
+    | '/editor'
     | '/endless'
     | '/how-to-play'
     | '/levels'
+    | '/community/$levelId'
     | '/play/$levelId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/community'
     | '/customize'
+    | '/editor'
     | '/endless'
     | '/how-to-play'
     | '/levels'
+    | '/community/$levelId'
     | '/play/$levelId'
   id:
     | '__root__'
     | '/'
+    | '/community'
     | '/customize'
+    | '/editor'
     | '/endless'
     | '/how-to-play'
     | '/levels'
+    | '/community/$levelId'
     | '/play/$levelId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CommunityRoute: typeof CommunityRouteWithChildren
   CustomizeRoute: typeof CustomizeRoute
+  EditorRoute: typeof EditorRoute
   EndlessRoute: typeof EndlessRoute
   HowToPlayRoute: typeof HowToPlayRoute
   LevelsRoute: typeof LevelsRoute
@@ -131,11 +169,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EndlessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/customize': {
       id: '/customize'
       path: '/customize'
       fullPath: '/customize'
       preLoaderRoute: typeof CustomizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community': {
+      id: '/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof CommunityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -152,12 +204,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayLevelIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/community/$levelId': {
+      id: '/community/$levelId'
+      path: '/$levelId'
+      fullPath: '/community/$levelId'
+      preLoaderRoute: typeof CommunityLevelIdRouteImport
+      parentRoute: typeof CommunityRoute
+    }
   }
 }
 
+interface CommunityRouteChildren {
+  CommunityLevelIdRoute: typeof CommunityLevelIdRoute
+}
+
+const CommunityRouteChildren: CommunityRouteChildren = {
+  CommunityLevelIdRoute: CommunityLevelIdRoute,
+}
+
+const CommunityRouteWithChildren = CommunityRoute._addFileChildren(
+  CommunityRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CommunityRoute: CommunityRouteWithChildren,
   CustomizeRoute: CustomizeRoute,
+  EditorRoute: EditorRoute,
   EndlessRoute: EndlessRoute,
   HowToPlayRoute: HowToPlayRoute,
   LevelsRoute: LevelsRoute,
