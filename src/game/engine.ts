@@ -845,6 +845,50 @@ function drawCubeBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin
   ctx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
 }
 
+function drawRobotBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  const torsoH = s * 0.7;
+  const torsoW = s * 0.85;
+  const grad = ctx.createLinearGradient(-torsoW / 2, -torsoH / 2, torsoW / 2, torsoH / 2);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  const r = 4;
+  ctx.beginPath();
+  ctx.moveTo(-torsoW / 2 + r, -torsoH / 2);
+  ctx.lineTo(torsoW / 2 - r, -torsoH / 2);
+  ctx.quadraticCurveTo(torsoW / 2, -torsoH / 2, torsoW / 2, -torsoH / 2 + r);
+  ctx.lineTo(torsoW / 2, torsoH / 2 - r);
+  ctx.quadraticCurveTo(torsoW / 2, torsoH / 2, torsoW / 2 - r, torsoH / 2);
+  ctx.lineTo(-torsoW / 2 + r, torsoH / 2);
+  ctx.quadraticCurveTo(-torsoW / 2, torsoH / 2, -torsoW / 2, torsoH / 2 - r);
+  ctx.lineTo(-torsoW / 2, -torsoH / 2 + r);
+  ctx.quadraticCurveTo(-torsoW / 2, -torsoH / 2, -torsoW / 2 + r, -torsoH / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Antenna
+  ctx.strokeStyle = skin.secondary;
+  ctx.beginPath();
+  ctx.moveTo(0, -torsoH / 2);
+  ctx.lineTo(0, -s / 2 + 2);
+  ctx.stroke();
+  ctx.fillStyle = skin.glow;
+  ctx.beginPath();
+  ctx.arc(0, -s / 2 + 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // Legs
+  ctx.fillStyle = skin.secondary;
+  ctx.fillRect(-torsoW / 2 + 2, torsoH / 2, 7, s / 2 - torsoH / 2);
+  ctx.fillRect(torsoW / 2 - 9, torsoH / 2, 7, s / 2 - torsoH / 2);
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-torsoW / 2 + 2, torsoH / 2, 7, s / 2 - torsoH / 2);
+  ctx.strokeRect(torsoW / 2 - 9, torsoH / 2, 7, s / 2 - torsoH / 2);
+}
+
 function drawShipBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
   // Jet/ship: pointed nose right, swept wings, flat tail
   const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
