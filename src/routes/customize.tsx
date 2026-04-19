@@ -206,21 +206,49 @@ function drawModeBody(
   ctx.lineWidth = 2;
   switch (mode) {
     case "cube":
-    case "robot":
     case "spider": {
       ctx.fillRect(-s / 2, -s / 2, s, s);
       ctx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
       break;
     }
+    case "robot": {
+      // Robot torso + antenna + legs
+      const torsoH = s * 0.7;
+      const torsoW = s * 0.85;
+      ctx.fillRect(-torsoW / 2, -torsoH / 2, torsoW, torsoH);
+      ctx.strokeRect(-torsoW / 2 + 1, -torsoH / 2 + 1, torsoW - 2, torsoH - 2);
+      ctx.strokeStyle = skin.secondary;
+      ctx.beginPath();
+      ctx.moveTo(0, -torsoH / 2);
+      ctx.lineTo(0, -s / 2 + 2);
+      ctx.stroke();
+      ctx.fillStyle = skin.glow;
+      ctx.beginPath();
+      ctx.arc(0, -s / 2 + 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = skin.secondary;
+      ctx.fillRect(-torsoW / 2 + 2, torsoH / 2, 7, s / 2 - torsoH / 2);
+      ctx.fillRect(torsoW / 2 - 9, torsoH / 2, 7, s / 2 - torsoH / 2);
+      break;
+    }
     case "ship": {
+      // Jet shape
       ctx.beginPath();
       ctx.moveTo(s / 2, 0);
-      ctx.lineTo(-s / 2, -s / 2 + 4);
-      ctx.lineTo(-s / 2 + 8, 0);
-      ctx.lineTo(-s / 2, s / 2 - 4);
+      ctx.lineTo(s / 6, -s / 3);
+      ctx.lineTo(-s / 2, -s / 2);
+      ctx.lineTo(-s / 2 + 6, -s / 6);
+      ctx.lineTo(-s / 2 + 2, 0);
+      ctx.lineTo(-s / 2 + 6, s / 6);
+      ctx.lineTo(-s / 2, s / 2);
+      ctx.lineTo(s / 6, s / 3);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.beginPath();
+      ctx.ellipse(s / 8, -2, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
       break;
     }
     case "ball": {

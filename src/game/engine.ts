@@ -139,12 +139,34 @@ export function jump(state: GameState) {
       break;
     }
     case "spider": {
-      // Teleport to opposite surface instantly
-      if (state.onGround) {
-        state.gravityDir = state.gravityDir === 1 ? -1 : 1;
-        state.vy = 0;
-        sfxPortal();
+      // Teleport instantly to the opposite surface (ceiling <-> floor)
+      const groundTop = state.height - groundPx(state.height);
+      const ceilingTop = 0;
+      const fromY = state.py;
+      // Snap to opposite surface based on current gravity
+      if (state.gravityDir === 1) {
+        // currently floor-bound -> teleport to ceiling
+        state.py = ceilingTop + PLAYER_SIZE / 2 - 4;
+      } else {
+        state.py = groundTop - PLAYER_SIZE / 2 + 4;
       }
+      state.gravityDir = state.gravityDir === 1 ? -1 : 1;
+      state.vy = 0;
+      state.onGround = true;
+      // Draw a vertical trace as particles
+      const steps = 12;
+      const x = state.px;
+      for (let i = 0; i < steps; i++) {
+        const ty = fromY + ((state.py - fromY) * i) / steps;
+        state.particles.push({
+          x: x + state.scrollX, y: ty,
+          vx: 0, vy: 0,
+          life: 0, max: 0.35,
+          color: state.skin.glow,
+          size: 5,
+        });
+      }
+      sfxPortal();
       break;
     }
     case "swing": {
@@ -747,17 +769,18 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.shadowBlur = 28;
 
   switch (state.mode) {
-    case "cube":
-    case "robot": {
+    case "cube": {
       drawCubeBody(ctx, s, skin);
       drawIconPattern(ctx, pattern, s, skin);
-      if (state.mode === "robot") {
-        // Little legs
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = skin.secondary;
-        ctx.fillRect(-s / 2 + 4, s / 2 - 2, 8, 6);
-        ctx.fillRect(s / 2 - 12, s / 2 - 2, 8, 6);
-      }
+      break;
+    }
+    case "robot": {
+      drawRobotBody(ctx, s, skin);
+      ctx.save();
+      ctx.translate(0, -3);
+      ctx.scale(0.8, 0.8);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
       break;
     }
     case "ship": {
@@ -822,17 +845,69 @@ function drawCubeBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin
   ctx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
 }
 
+function drawRobotBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
+  const torsoH = s * 0.7;
+  const torsoW = s * 0.85;
+  const grad = ctx.createLinearGradient(-torsoW / 2, -torsoH / 2, torsoW / 2, torsoH / 2);
+  grad.addColorStop(0, skin.primary);
+  grad.addColorStop(1, skin.secondary);
+  ctx.fillStyle = grad;
+  const r = 4;
+  ctx.beginPath();
+  ctx.moveTo(-torsoW / 2 + r, -torsoH / 2);
+  ctx.lineTo(torsoW / 2 - r, -torsoH / 2);
+  ctx.quadraticCurveTo(torsoW / 2, -torsoH / 2, torsoW / 2, -torsoH / 2 + r);
+  ctx.lineTo(torsoW / 2, torsoH / 2 - r);
+  ctx.quadraticCurveTo(torsoW / 2, torsoH / 2, torsoW / 2 - r, torsoH / 2);
+  ctx.lineTo(-torsoW / 2 + r, torsoH / 2);
+  ctx.quadraticCurveTo(-torsoW / 2, torsoH / 2, -torsoW / 2, torsoH / 2 - r);
+  ctx.lineTo(-torsoW / 2, -torsoH / 2 + r);
+  ctx.quadraticCurveTo(-torsoW / 2, -torsoH / 2, -torsoW / 2 + r, -torsoH / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Antenna
+  ctx.strokeStyle = skin.secondary;
+  ctx.beginPath();
+  ctx.moveTo(0, -torsoH / 2);
+  ctx.lineTo(0, -s / 2 + 2);
+  ctx.stroke();
+  ctx.fillStyle = skin.glow;
+  ctx.beginPath();
+  ctx.arc(0, -s / 2 + 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // Legs
+  ctx.fillStyle = skin.secondary;
+  ctx.fillRect(-torsoW / 2 + 2, torsoH / 2, 7, s / 2 - torsoH / 2);
+  ctx.fillRect(torsoW / 2 - 9, torsoH / 2, 7, s / 2 - torsoH / 2);
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-torsoW / 2 + 2, torsoH / 2, 7, s / 2 - torsoH / 2);
+  ctx.strokeRect(torsoW / 2 - 9, torsoH / 2, 7, s / 2 - torsoH / 2);
+}
+
 function drawShipBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
-  // Body: rounded triangle pointing right
+  // Jet/ship: pointed nose right, swept wings, flat tail
   const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
   grad.addColorStop(0, skin.primary);
   grad.addColorStop(1, skin.secondary);
   ctx.fillStyle = grad;
   ctx.beginPath();
+  // nose
   ctx.moveTo(s / 2, 0);
-  ctx.lineTo(-s / 2, -s / 2 + 4);
-  ctx.lineTo(-s / 2 + 8, 0);
-  ctx.lineTo(-s / 2, s / 2 - 4);
+  // top wing
+  ctx.lineTo(s / 6, -s / 3);
+  ctx.lineTo(-s / 2, -s / 2);
+  ctx.lineTo(-s / 2 + 6, -s / 6);
+  // tail
+  ctx.lineTo(-s / 2 + 2, 0);
+  ctx.lineTo(-s / 2 + 6, s / 6);
+  // bottom wing
+  ctx.lineTo(-s / 2, s / 2);
+  ctx.lineTo(s / 6, s / 3);
   ctx.closePath();
   ctx.fill();
   ctx.shadowBlur = 0;
@@ -840,9 +915,17 @@ function drawShipBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin
   ctx.lineWidth = 2;
   ctx.stroke();
   // Cockpit
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.beginPath();
-  ctx.ellipse(2, -2, 8, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(s / 8, -2, 7, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Engine flame
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.moveTo(-s / 2 + 2, -3);
+  ctx.lineTo(-s / 2 - 6, 0);
+  ctx.lineTo(-s / 2 + 2, 3);
+  ctx.closePath();
   ctx.fill();
 }
 
