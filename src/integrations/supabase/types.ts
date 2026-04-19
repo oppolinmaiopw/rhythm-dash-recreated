@@ -14,13 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      community_levels: {
+        Row: {
+          author_name: string
+          created_at: string
+          difficulty: string
+          id: string
+          length_tiles: number
+          name: string
+          obstacles: Json
+          play_count: number
+        }
+        Insert: {
+          author_name: string
+          created_at?: string
+          difficulty: string
+          id?: string
+          length_tiles: number
+          name: string
+          obstacles: Json
+          play_count?: number
+        }
+        Update: {
+          author_name?: string
+          created_at?: string
+          difficulty?: string
+          id?: string
+          length_tiles?: number
+          name?: string
+          obstacles?: Json
+          play_count?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_level_play_count: {
+        Args: { level_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
