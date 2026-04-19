@@ -769,17 +769,18 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.shadowBlur = 28;
 
   switch (state.mode) {
-    case "cube":
-    case "robot": {
+    case "cube": {
       drawCubeBody(ctx, s, skin);
       drawIconPattern(ctx, pattern, s, skin);
-      if (state.mode === "robot") {
-        // Little legs
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = skin.secondary;
-        ctx.fillRect(-s / 2 + 4, s / 2 - 2, 8, 6);
-        ctx.fillRect(s / 2 - 12, s / 2 - 2, 8, 6);
-      }
+      break;
+    }
+    case "robot": {
+      drawRobotBody(ctx, s, skin);
+      ctx.save();
+      ctx.translate(0, -3);
+      ctx.scale(0.8, 0.8);
+      drawIconPattern(ctx, pattern, s, skin);
+      ctx.restore();
       break;
     }
     case "ship": {
