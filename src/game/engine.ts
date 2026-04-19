@@ -139,12 +139,34 @@ export function jump(state: GameState) {
       break;
     }
     case "spider": {
-      // Teleport to opposite surface instantly
-      if (state.onGround) {
-        state.gravityDir = state.gravityDir === 1 ? -1 : 1;
-        state.vy = 0;
-        sfxPortal();
+      // Teleport instantly to the opposite surface (ceiling <-> floor)
+      const groundTop = state.height - groundPx(state.height);
+      const ceilingTop = 0;
+      const fromY = state.py;
+      // Snap to opposite surface based on current gravity
+      if (state.gravityDir === 1) {
+        // currently floor-bound -> teleport to ceiling
+        state.py = ceilingTop + PLAYER_SIZE / 2 - 4;
+      } else {
+        state.py = groundTop - PLAYER_SIZE / 2 + 4;
       }
+      state.gravityDir = state.gravityDir === 1 ? -1 : 1;
+      state.vy = 0;
+      state.onGround = true;
+      // Draw a vertical trace as particles
+      const steps = 12;
+      const x = state.px;
+      for (let i = 0; i < steps; i++) {
+        const ty = fromY + ((state.py - fromY) * i) / steps;
+        state.particles.push({
+          x: x + state.scrollX, y: ty,
+          vx: 0, vy: 0,
+          life: 0, max: 0.35,
+          color: state.skin.glow,
+          size: 5,
+        });
+      }
+      sfxPortal();
       break;
     }
     case "swing": {
@@ -823,16 +845,24 @@ function drawCubeBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin
 }
 
 function drawShipBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin) {
-  // Body: rounded triangle pointing right
+  // Jet/ship: pointed nose right, swept wings, flat tail
   const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
   grad.addColorStop(0, skin.primary);
   grad.addColorStop(1, skin.secondary);
   ctx.fillStyle = grad;
   ctx.beginPath();
+  // nose
   ctx.moveTo(s / 2, 0);
-  ctx.lineTo(-s / 2, -s / 2 + 4);
-  ctx.lineTo(-s / 2 + 8, 0);
-  ctx.lineTo(-s / 2, s / 2 - 4);
+  // top wing
+  ctx.lineTo(s / 6, -s / 3);
+  ctx.lineTo(-s / 2, -s / 2);
+  ctx.lineTo(-s / 2 + 6, -s / 6);
+  // tail
+  ctx.lineTo(-s / 2 + 2, 0);
+  ctx.lineTo(-s / 2 + 6, s / 6);
+  // bottom wing
+  ctx.lineTo(-s / 2, s / 2);
+  ctx.lineTo(s / 6, s / 3);
   ctx.closePath();
   ctx.fill();
   ctx.shadowBlur = 0;
@@ -840,9 +870,17 @@ function drawShipBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSkin
   ctx.lineWidth = 2;
   ctx.stroke();
   // Cockpit
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.beginPath();
-  ctx.ellipse(2, -2, 8, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(s / 8, -2, 7, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Engine flame
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.moveTo(-s / 2 + 2, -3);
+  ctx.lineTo(-s / 2 - 6, 0);
+  ctx.lineTo(-s / 2 + 2, 3);
+  ctx.closePath();
   ctx.fill();
 }
 
