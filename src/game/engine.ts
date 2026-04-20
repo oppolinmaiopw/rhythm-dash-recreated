@@ -128,6 +128,18 @@ export function jump(state: GameState) {
         state.vy = -JUMP_VELOCITY * state.gravityDir;
         state.onGround = false;
         sfxJump();
+        const dustY = state.py + (state.gravityDir === 1 ? PLAYER_SIZE / 2 : -PLAYER_SIZE / 2);
+        for (let i = 0; i < 8; i++) {
+          const a = Math.PI + (Math.random() - 0.5) * 1.5;
+          const sp = 80 + Math.random() * 140;
+          state.particles.push({
+            x: state.px + state.scrollX, y: dustY,
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.3 * state.gravityDir,
+            life: 0, max: 0.4 + Math.random() * 0.2,
+            color: state.skin.glow + "cc",
+            size: 3 + Math.random() * 3,
+          });
+        }
       }
       break;
     }
