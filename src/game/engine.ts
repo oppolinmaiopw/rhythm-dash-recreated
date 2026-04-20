@@ -567,6 +567,16 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   const groundTop = h - groundPx(h);
   ctx.clearRect(0, 0, w, h);
 
+  // Camera shake offset (also affects HUD-overlap visually)
+  let shakeX = 0, shakeY = 0;
+  if (state.shake > 0) {
+    const intensity = (state.shake / Math.max(0.001, state.shake + 0.0)) * state.shakeAmp;
+    shakeX = (Math.random() - 0.5) * 2 * intensity;
+    shakeY = (Math.random() - 0.5) * 2 * intensity;
+  }
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
   drawGridBackground(ctx, state, accent);
 
   // Ground
@@ -628,7 +638,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   // Player
   if (state.alive) drawPlayer(ctx, state);
 
-  // Death flash
+  ctx.restore();
+
+  // Death flash (no shake)
   if (state.flashTime > 0) {
     ctx.fillStyle = `rgba(255,255,255,${state.flashTime * 1.4})`;
     ctx.fillRect(0, 0, w, h);
