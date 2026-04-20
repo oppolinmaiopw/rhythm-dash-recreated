@@ -5,7 +5,7 @@
 
 import type { LevelDef, Obstacle } from "./levels";
 import { generateEndlessObstacles } from "./levels";
-import { sfxCrash, sfxJump, sfxPad, sfxPortal } from "./audio";
+import { sfxCrash, sfxJump, sfxPad, sfxPortal, sfxVictory } from "./audio";
 import {
   drawIconPattern,
   loadSkin,
@@ -64,6 +64,8 @@ export interface GameState {
   height: number;
   lastPadTile: number;
   flashTime: number;
+  shake: number; // remaining shake time in seconds
+  shakeAmp: number; // peak px
   skin: PlayerSkin;
 }
 
@@ -94,8 +96,15 @@ export function createGame(level: LevelDef, opts: { endless?: boolean; width: nu
     height: opts.height,
     lastPadTile: -1,
     flashTime: 0,
+    shake: 0,
+    shakeAmp: 0,
     skin: loadSkin(),
   };
+}
+
+function addShake(state: GameState, amp: number, dur: number) {
+  state.shake = Math.max(state.shake, dur);
+  state.shakeAmp = Math.max(state.shakeAmp, amp);
 }
 
 export function groundPx(_h: number) {
@@ -119,6 +128,18 @@ export function jump(state: GameState) {
         state.vy = -JUMP_VELOCITY * state.gravityDir;
         state.onGround = false;
         sfxJump();
+        const dustY = state.py + (state.gravityDir === 1 ? PLAYER_SIZE / 2 : -PLAYER_SIZE / 2);
+        for (let i = 0; i < 8; i++) {
+          const a = Math.PI + (Math.random() - 0.5) * 1.5;
+          const sp = 80 + Math.random() * 140;
+          state.particles.push({
+            x: state.px + state.scrollX, y: dustY,
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.3 * state.gravityDir,
+            life: 0, max: 0.4 + Math.random() * 0.2,
+            color: state.skin.glow + "cc",
+            size: 3 + Math.random() * 3,
+          });
+        }
       }
       break;
     }
@@ -370,6 +391,9 @@ export function update(state: GameState, dt: number) {
     state.progress = Math.min(1, state.scrollX / totalPx);
     if (state.progress >= 1) {
       state.finished = true;
+      sfxVictory();
+      addShake(state, 6, 0.4);
+      spawnParticles(state, state.px, state.py, state.skin.glow, 60);
       return;
     }
   } else {
@@ -438,7 +462,8 @@ export function update(state: GameState, dt: number) {
         state.vy = 0;
         // If switching to ground-based mode while in air, do NOT snap — let them fall
         sfxPortal();
-        spawnParticles(state, state.px, state.py, "#a78bfa", 30);
+        spawnParticles(state, state.px, state.py, "#a78bfa", 40);
+        addShake(state, 4, 0.18);
       }
       continue;
     }
@@ -446,6 +471,8 @@ export function update(state: GameState, dt: number) {
       state.gravityDir = state.gravityDir === 1 ? -1 : 1;
       state.vy = 0;
       sfxPortal();
+      spawnParticles(state, state.px, state.py, "#a78bfa", 24);
+      addShake(state, 3, 0.15);
       continue;
     }
     if (r.obstacle.type === "pad") {
@@ -454,7 +481,8 @@ export function update(state: GameState, dt: number) {
         state.onGround = false;
         state.lastPadTile = r.obstacle.x;
         sfxPad();
-        spawnParticles(state, state.px, state.py + PLAYER_SIZE / 2, "#facc15", 14);
+        spawnParticles(state, state.px, state.py + PLAYER_SIZE / 2, "#facc15", 22);
+        addShake(state, 3, 0.12);
       }
       continue;
     }
@@ -531,12 +559,17 @@ export function update(state: GameState, dt: number) {
   }
 
   if (state.flashTime > 0) state.flashTime = Math.max(0, state.flashTime - dt);
+  if (state.shake > 0) {
+    state.shake = Math.max(0, state.shake - dt);
+    if (state.shake === 0) state.shakeAmp = 0;
+  }
 }
 
 function die(state: GameState) {
   state.alive = false;
   state.flashTime = 0.25;
-  spawnParticles(state, state.px, state.py, state.skin.glow, 50);
+  spawnParticles(state, state.px, state.py, state.skin.glow, 60);
+  addShake(state, 10, 0.45);
   sfxCrash();
 }
 
@@ -545,6 +578,15 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   const h = state.height;
   const groundTop = h - groundPx(h);
   ctx.clearRect(0, 0, w, h);
+
+  // Camera shake offset (also affects HUD-overlap visually)
+  let shakeX = 0, shakeY = 0;
+  if (state.shake > 0 && state.shakeAmp > 0) {
+    shakeX = (Math.random() - 0.5) * 2 * state.shakeAmp;
+    shakeY = (Math.random() - 0.5) * 2 * state.shakeAmp;
+  }
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
 
   drawGridBackground(ctx, state, accent);
 
@@ -607,7 +649,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   // Player
   if (state.alive) drawPlayer(ctx, state);
 
-  // Death flash
+  ctx.restore();
+
+  // Death flash (no shake)
   if (state.flashTime > 0) {
     ctx.fillStyle = `rgba(255,255,255,${state.flashTime * 1.4})`;
     ctx.fillRect(0, 0, w, h);

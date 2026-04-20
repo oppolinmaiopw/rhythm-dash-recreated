@@ -7,6 +7,21 @@ let musicGain: GainNode | null = null;
 let sfxGain: GainNode | null = null;
 let loopTimer: number | null = null;
 let isMuted = false;
+let musicVolume = 0.35;
+let sfxVolume = 0.5;
+let masterVolume = 0.7;
+
+const MUTE_KEY = "cubefall-muted";
+const MVOL_KEY = "cubefall-music-vol";
+const SVOL_KEY = "cubefall-sfx-vol";
+
+if (typeof window !== "undefined") {
+  isMuted = localStorage.getItem(MUTE_KEY) === "1";
+  const mv = parseFloat(localStorage.getItem(MVOL_KEY) ?? "");
+  const sv = parseFloat(localStorage.getItem(SVOL_KEY) ?? "");
+  if (!Number.isNaN(mv)) musicVolume = mv;
+  if (!Number.isNaN(sv)) sfxVolume = sv;
+}
 
 function ensureCtx() {
   if (ctx) return ctx;
@@ -15,13 +30,13 @@ function ensureCtx() {
     (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   ctx = new Ctor();
   masterGain = ctx.createGain();
-  masterGain.gain.value = isMuted ? 0 : 0.7;
+  masterGain.gain.value = isMuted ? 0 : masterVolume;
   masterGain.connect(ctx.destination);
   musicGain = ctx.createGain();
-  musicGain.gain.value = 0.35;
+  musicGain.gain.value = musicVolume;
   musicGain.connect(masterGain);
   sfxGain = ctx.createGain();
-  sfxGain.gain.value = 0.5;
+  sfxGain.gain.value = sfxVolume;
   sfxGain.connect(masterGain);
   return ctx;
 }
@@ -33,13 +48,28 @@ export function unlockAudio() {
 
 export function setMuted(m: boolean) {
   isMuted = m;
+  if (typeof window !== "undefined") localStorage.setItem(MUTE_KEY, m ? "1" : "0");
   if (masterGain && ctx) {
-    masterGain.gain.setTargetAtTime(m ? 0 : 0.7, ctx.currentTime, 0.05);
+    masterGain.gain.setTargetAtTime(m ? 0 : masterVolume, ctx.currentTime, 0.05);
   }
 }
 export function getMuted() {
   return isMuted;
 }
+
+export function setMusicVolume(v: number) {
+  musicVolume = Math.max(0, Math.min(1, v));
+  if (typeof window !== "undefined") localStorage.setItem(MVOL_KEY, String(musicVolume));
+  if (musicGain && ctx) musicGain.gain.setTargetAtTime(musicVolume, ctx.currentTime, 0.05);
+}
+export function getMusicVolume() { return musicVolume; }
+
+export function setSfxVolume(v: number) {
+  sfxVolume = Math.max(0, Math.min(1, v));
+  if (typeof window !== "undefined") localStorage.setItem(SVOL_KEY, String(sfxVolume));
+  if (sfxGain && ctx) sfxGain.gain.setTargetAtTime(sfxVolume, ctx.currentTime, 0.05);
+}
+export function getSfxVolume() { return sfxVolume; }
 
 function note(freq: number, time: number, dur: number, type: OscillatorType, gainVal: number, dest: AudioNode) {
   if (!ctx) return;
@@ -80,16 +110,21 @@ const BASE_FREQS: Record<string, number> = {
   C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99,
 };
 
-// Two simple original loops, 16 steps, 4-on-the-floor with a synth bass and lead.
+// Synthwave-flavored loops, 16 steps. Lead is gentle pulse; bass walks; pad on downbeats.
 const LEAD_PATTERNS: Record<string, (string | null)[]> = {
   pulse: ["E4", null, "G4", null, "B4", null, "A4", "G4", "E4", null, "G4", "B4", "D5", null, "B4", "A4"],
-  rush: ["A3", "E4", "A4", "E4", "C5", "E4", "B4", "G4", "A3", "E4", "A4", "G4", "F4", "E4", "D4", "C4"],
+  rush:  ["A3", "E4", "A4", "E4", "C5", "E4", "B4", "G4", "A3", "E4", "A4", "G4", "F4", "E4", "D4", "C4"],
   storm: ["E4", "G4", "B4", "E5", "D5", "B4", "G4", "E4", "F4", "A4", "C5", "E5", "D5", "B4", "A4", "F4"],
 };
 const BASS_PATTERNS: Record<string, (string | null)[]> = {
   pulse: ["E2", null, "E2", null, "G2", null, "E2", null, "A2", null, "A2", null, "D2", null, "G2", null],
-  rush: ["A2", null, "A2", "E2", "C3", null, "G2", "E2", "A2", null, "A2", "E2", "F2", null, "G2", "E2"],
+  rush:  ["A2", null, "A2", "E2", "C3", null, "G2", "E2", "A2", null, "A2", "E2", "F2", null, "G2", "E2"],
   storm: ["E2", "E2", "G2", "E2", "A2", "A2", "C3", "A2", "F2", "F2", "A2", "F2", "D2", "D2", "G2", "G2"],
+};
+const PAD_PATTERNS: Record<string, (string | null)[]> = {
+  pulse: ["E3", null, null, null, "G3", null, null, null, "A3", null, null, null, "D3", null, null, null],
+  rush:  ["A3", null, null, null, "C4", null, null, null, "F3", null, null, null, "G3", null, null, null],
+  storm: ["E3", null, null, null, "A3", null, null, null, "F3", null, null, null, "G3", null, null, null],
 };
 
 let currentTrack: keyof typeof LEAD_PATTERNS = "pulse";
@@ -103,8 +138,15 @@ function scheduleStep() {
   while (nextStepAt < ctx.currentTime + 0.2) {
     const lead = LEAD_PATTERNS[currentTrack][stepIndex % 16];
     const bass = BASS_PATTERNS[currentTrack][stepIndex % 16];
-    if (lead) note(BASE_FREQS[lead], nextStepAt, stepDur * 0.9, "square", 0.12, musicGain);
-    if (bass) note(BASE_FREQS[bass], nextStepAt, stepDur * 0.95, "sawtooth", 0.18, musicGain);
+    const pad = PAD_PATTERNS[currentTrack][stepIndex % 16];
+    if (lead) note(BASE_FREQS[lead], nextStepAt, stepDur * 0.9, "square", 0.11, musicGain);
+    if (bass) note(BASE_FREQS[bass], nextStepAt, stepDur * 0.95, "sawtooth", 0.16, musicGain);
+    if (pad) {
+      // pad chord shimmer
+      note(BASE_FREQS[pad], nextStepAt, stepDur * 4, "triangle", 0.05, musicGain);
+      const fifth = BASE_FREQS[pad] * 1.5;
+      note(fifth, nextStepAt, stepDur * 4, "triangle", 0.04, musicGain);
+    }
     // kick on every other step
     if (stepIndex % 2 === 0) {
       const o = ctx.createOscillator();
@@ -119,6 +161,8 @@ function scheduleStep() {
     }
     // hat
     if (stepIndex % 2 === 1) noiseBurst(nextStepAt, 0.04, 0.08, musicGain);
+    // snare on backbeats
+    if (stepIndex % 8 === 4) noiseBurst(nextStepAt, 0.12, 0.18, musicGain);
     stepIndex++;
     nextStepAt += stepDur;
   }
@@ -202,4 +246,37 @@ export function sfxPortal() {
     o.start(t + i * 0.03);
     o.stop(t + i * 0.03 + 0.18);
   }
+}
+
+export function sfxVictory() {
+  if (!ctx || !sfxGain) return;
+  const t = ctx.currentTime;
+  // arpeggio up
+  const seq = [BASE_FREQS.C4, BASE_FREQS.E4, BASE_FREQS.G4, BASE_FREQS.C5, BASE_FREQS.E5, BASE_FREQS.G5];
+  seq.forEach((f, i) => {
+    const o = ctx!.createOscillator();
+    const g = ctx!.createGain();
+    o.type = "square";
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0, t + i * 0.08);
+    g.gain.linearRampToValueAtTime(0.22, t + i * 0.08 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.25);
+    o.connect(g).connect(sfxGain!);
+    o.start(t + i * 0.08);
+    o.stop(t + i * 0.08 + 0.3);
+  });
+}
+
+export function sfxClick() {
+  if (!ctx || !sfxGain) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "square";
+  o.frequency.value = 720;
+  g.gain.setValueAtTime(0.15, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  o.connect(g).connect(sfxGain);
+  o.start(t);
+  o.stop(t + 0.06);
 }

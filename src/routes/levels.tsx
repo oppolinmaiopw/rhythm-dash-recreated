@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { NeonHeader } from "@/components/NeonHeader";
 import { Button } from "@/components/ui/button";
 import { LEVELS } from "@/game/levels";
+import { getProgress } from "@/lib/progress";
 
 export const Route = createFileRoute("/levels")({
   component: Levels,
@@ -15,6 +16,22 @@ export const Route = createFileRoute("/levels")({
   }),
 });
 
+function StarRow({ filled }: { filled: 0 | 1 | 2 | 3 }) {
+  return (
+    <span className="inline-flex text-base">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className={i < filled ? "text-yellow-300" : "text-white/25"}
+          style={i < filled ? { textShadow: "0 0 8px rgba(253,224,71,0.9)" } : undefined}
+        >
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function Levels() {
   return (
     <div
@@ -26,18 +43,24 @@ function Levels() {
     >
       <NeonHeader active="levels" />
       <div className="mx-auto max-w-6xl px-5 py-10 md:px-10 md:py-16">
-        <h1 className="font-display text-4xl uppercase tracking-widest text-white text-glow-pink md:text-6xl">
-          Choose your level
-        </h1>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 className="font-display text-4xl uppercase tracking-widest text-white text-glow-pink md:text-6xl">
+            Choose your level
+          </h1>
+          <Link to="/stats">
+            <Button variant="ghost" className="font-display uppercase tracking-widest text-white">
+              📊 My Stats
+            </Button>
+          </Link>
+        </div>
         <p className="mt-3 max-w-xl text-white/70">
-          Each level has its own pulsing soundtrack and rhythm. Start easy, then crank it up.
+          Each level has its own pulsing soundtrack and rhythm. Earn 1★ at 33%, 2★ at 66%, 3★ for finishing.
         </p>
 
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {LEVELS.map((lvl) => {
-            const best = typeof window !== "undefined"
-              ? Math.round(parseFloat(localStorage.getItem(`gd-best-${lvl.id}`) ?? "0") * 100)
-              : 0;
+            const p = typeof window !== "undefined" ? getProgress(lvl.id) : { bestPct: 0, stars: 0 as const, completions: 0, attempts: 0 };
+            const best = Math.round(p.bestPct * 100);
             return (
               <Link
                 key={lvl.id}
@@ -53,6 +76,7 @@ function Levels() {
                   <div className="mt-2 font-display text-3xl uppercase text-white text-glow-pink">
                     {lvl.name}
                   </div>
+                  <div className="mt-2"><StarRow filled={p.stars} /></div>
                 </div>
                 <div>
                   <div className="mb-3 h-2 overflow-hidden rounded-full bg-black/40">

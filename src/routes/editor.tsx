@@ -3,8 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NeonHeader } from "@/components/NeonHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Obstacle, ObstacleType } from "@/game/levels";
+import { GameCanvas } from "@/components/GameCanvas";
+import type { LevelDef, Obstacle, ObstacleType } from "@/game/levels";
 import { supabase } from "@/integrations/supabase/client";
+import { addMyPublished } from "@/lib/progress";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/editor")({
@@ -22,28 +24,27 @@ export const Route = createFileRoute("/editor")({
   }),
 });
 
-const TOOLS: { id: ObstacleType | "erase"; label: string; color: string }[] = [
-  { id: "spike", label: "Spike", color: "#fff" },
-  { id: "spike3", label: "3 Spikes", color: "#fff" },
-  { id: "block", label: "Block", color: "#fde047" },
-  { id: "tall", label: "Tall", color: "#fde047" },
-  { id: "platform", label: "Platform", color: "#22d3ee" },
-  { id: "pad", label: "Jump Pad", color: "#facc15" },
-  { id: "portal-grav", label: "Gravity", color: "#a78bfa" },
-  { id: "portal-cube", label: "→ Cube", color: "#f472b6" },
-  { id: "portal-ship", label: "→ Ship", color: "#fb923c" },
-  { id: "portal-ball", label: "→ Ball", color: "#fde047" },
-  { id: "portal-ufo", label: "→ UFO", color: "#22d3ee" },
-  { id: "portal-wave", label: "→ Wave", color: "#a78bfa" },
-  { id: "portal-robot", label: "→ Robot", color: "#34d399" },
-  { id: "portal-spider", label: "→ Spider", color: "#f87171" },
-  { id: "portal-swing", label: "→ Swing", color: "#e879f9" },
-  { id: "erase", label: "🗑 Erase", color: "#888" },
+const TOOLS: { id: ObstacleType | "erase"; label: string; color: string; key: string }[] = [
+  { id: "spike", label: "Spike", color: "#fff", key: "1" },
+  { id: "spike3", label: "3 Spikes", color: "#fff", key: "2" },
+  { id: "block", label: "Block", color: "#fde047", key: "3" },
+  { id: "tall", label: "Tall", color: "#fde047", key: "4" },
+  { id: "platform", label: "Platform", color: "#22d3ee", key: "5" },
+  { id: "pad", label: "Jump Pad", color: "#facc15", key: "6" },
+  { id: "portal-grav", label: "Gravity", color: "#a78bfa", key: "7" },
+  { id: "portal-cube", label: "→ Cube", color: "#f472b6", key: "8" },
+  { id: "portal-ship", label: "→ Ship", color: "#fb923c", key: "9" },
+  { id: "portal-ball", label: "→ Ball", color: "#fde047", key: "0" },
+  { id: "portal-ufo", label: "→ UFO", color: "#22d3ee", key: "" },
+  { id: "portal-wave", label: "→ Wave", color: "#a78bfa", key: "" },
+  { id: "portal-robot", label: "→ Robot", color: "#34d399", key: "" },
+  { id: "portal-spider", label: "→ Spider", color: "#f87171", key: "" },
+  { id: "portal-swing", label: "→ Swing", color: "#e879f9", key: "" },
+  { id: "erase", label: "🗑 Erase", color: "#888", key: "e" },
 ];
 
-const ROWS = 8; // editor rows above ground (y=0 is ground)
+const ROWS = 8;
 const TILE_PX = 36;
-
 const DRAFT_KEY = "cubefall-editor-draft-v1";
 
 interface Draft {
@@ -64,21 +65,22 @@ function loadDraft(): Draft {
     return defaultDraft();
   }
 }
-
 function defaultDraft(): Draft {
-  return {
-    name: "My Level",
-    authorName: "Anonymous",
-    difficulty: "Normal",
-    length: 100,
-    obstacles: [],
-  };
+  return { name: "My Level", authorName: "Anonymous", difficulty: "Normal", length: 100, obstacles: [] };
 }
-
 function saveDraft(d: Draft) {
   if (typeof window === "undefined") return;
   localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
 }
+
+function difficultyToBpm(d: string) {
+  switch (d) { case "Easy": return 140; case "Normal": return 155; case "Hard": return 170; case "Insane": return 185; default: return 150; }
+}
+function difficultyToBg(d: string) {
+  switch (d) { case "Easy": return "var(--gradient-bg-1)"; case "Normal": return "var(--gradient-bg-2)"; case "Hard": return "var(--gradient-bg-3)"; default: return "var(--gradient-bg-endless)"; }
+}
+
+const HISTORY_LIMIT = 50;
 
 function Editor() {
   const navigate = useNavigate();
@@ -86,7 +88,12 @@ function Editor() {
   const [tool, setTool] = useState<(typeof TOOLS)[number]["id"]>("spike");
   const [scrollX, setScrollX] = useState(0);
   const [publishing, setPublishing] = useState(false);
+  const [playtest, setPlaytest] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Undo/redo stacks of obstacles arrays only
+  const undoStack = useRef<Obstacle[][]>([]);
+  const redoStack = useRef<Obstacle[][]>([]);
 
   useEffect(() => {
     saveDraft(draft);
@@ -101,6 +108,30 @@ function Editor() {
     return map;
   }, [draft.obstacles]);
 
+  function pushHistory(prev: Obstacle[]) {
+    undoStack.current.push(prev);
+    if (undoStack.current.length > HISTORY_LIMIT) undoStack.current.shift();
+    redoStack.current = [];
+  }
+
+  function commit(next: Obstacle[]) {
+    pushHistory(draft.obstacles);
+    setDraft({ ...draft, obstacles: next });
+  }
+
+  function undo() {
+    const prev = undoStack.current.pop();
+    if (!prev) return;
+    redoStack.current.push(draft.obstacles);
+    setDraft({ ...draft, obstacles: prev });
+  }
+  function redo() {
+    const next = redoStack.current.pop();
+    if (!next) return;
+    undoStack.current.push(draft.obstacles);
+    setDraft({ ...draft, obstacles: next });
+  }
+
   function placeAt(xTile: number, rowFromGround: number) {
     if (xTile < 2 || xTile >= draft.length) return;
     const key = `${xTile},${rowFromGround}`;
@@ -108,13 +139,10 @@ function Editor() {
       const next = draft.obstacles.filter(
         (o) => !(o.x === xTile && (o.y ?? 0) === rowFromGround),
       );
-      if (next.length !== draft.obstacles.length) {
-        setDraft({ ...draft, obstacles: next });
-      }
+      if (next.length !== draft.obstacles.length) commit(next);
       return;
     }
     if (obstaclesByCell.has(key)) return;
-    // Most obstacles are ground-based; only "platform" uses y > 0.
     const isGround =
       tool !== "platform" &&
       tool !== "portal-grav" &&
@@ -126,29 +154,63 @@ function Editor() {
       tool !== "portal-robot" &&
       tool !== "portal-spider" &&
       tool !== "portal-swing";
-    // Snap ground obstacles to ground row (rowFromGround = 0)
     const finalRow = isGround ? 0 : rowFromGround;
-    if (tool === "platform" && finalRow < 2) return; // platforms need air
+    if (tool === "platform" && finalRow < 2) return;
     const newOb: Obstacle = { x: xTile, type: tool };
     if (tool === "platform") newOb.y = finalRow;
-    setDraft({ ...draft, obstacles: [...draft.obstacles, newOb] });
+    commit([...draft.obstacles, newOb]);
   }
 
   function clearAll() {
     if (confirm("Clear every obstacle? This cannot be undone.")) {
-      setDraft({ ...draft, obstacles: [] });
+      commit([]);
     }
   }
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (playtest) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")) return;
+      // Undo / Redo
+      const meta = e.ctrlKey || e.metaKey;
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if (meta && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      // Tool shortcuts
+      const t = TOOLS.find((x) => x.key === e.key.toLowerCase());
+      if (t) { setTool(t.id); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, playtest]);
+
+  const playtestLevel = useMemo<LevelDef>(
+    () => ({
+      id: "playtest-" + Math.random().toString(36).slice(2, 8),
+      name: draft.name || "Playtest",
+      difficulty: (draft.difficulty as LevelDef["difficulty"]) ?? "Normal",
+      bg: difficultyToBg(draft.difficulty),
+      accent: "var(--neon-pink)",
+      bpm: difficultyToBpm(draft.difficulty),
+      length: draft.length,
+      obstacles: draft.obstacles,
+    }),
+    [draft],
+  );
+
   async function publish() {
-    if (draft.obstacles.length < 3) {
-      toast.error("Add at least 3 obstacles before publishing.");
-      return;
-    }
-    if (draft.name.trim().length < 1) {
-      toast.error("Name your level.");
-      return;
-    }
+    if (draft.obstacles.length < 3) { toast.error("Add at least 3 obstacles before publishing."); return; }
+    if (draft.name.trim().length < 1) { toast.error("Name your level."); return; }
     setPublishing(true);
     try {
       const { data, error } = await supabase
@@ -163,6 +225,7 @@ function Editor() {
         .select("id")
         .single();
       if (error) throw error;
+      addMyPublished(data.id);
       toast.success("Published to the community!");
       navigate({ to: "/community/$levelId", params: { levelId: data.id } });
     } catch (e) {
@@ -175,6 +238,14 @@ function Editor() {
 
   const visibleStart = Math.floor(scrollX / TILE_PX);
   const visibleCount = 36;
+
+  if (playtest) {
+    return (
+      <div className="h-screen w-screen overflow-hidden">
+        <GameCanvas level={playtestLevel} ephemeral onExit={() => setPlaytest(false)} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -192,10 +263,36 @@ function Editor() {
               Level Editor
             </h1>
             <p className="mt-2 max-w-xl text-sm text-white/70">
-              Click cells to place obstacles. Auto-saves to this browser. Publish to share with the community.
+              Click cells to place obstacles. Shortcuts: <kbd className="rounded bg-white/10 px-1">1-9</kbd> tools, <kbd className="rounded bg-white/10 px-1">E</kbd> erase, <kbd className="rounded bg-white/10 px-1">Ctrl+Z</kbd> undo, <kbd className="rounded bg-white/10 px-1">Ctrl+Shift+Z</kbd> redo.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              onClick={undo}
+              disabled={undoStack.current.length === 0}
+              className="font-display uppercase tracking-widest text-white"
+            >
+              ↶ Undo
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={redo}
+              disabled={redoStack.current.length === 0}
+              className="font-display uppercase tracking-widest text-white"
+            >
+              ↷ Redo
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (draft.obstacles.length === 0) { toast.error("Place a few obstacles first."); return; }
+                setPlaytest(true);
+              }}
+              className="font-display uppercase tracking-widest"
+            >
+              ▶ Playtest
+            </Button>
             <Link to="/community">
               <Button variant="ghost" className="font-display uppercase tracking-widest text-white">
                 Community
@@ -214,9 +311,7 @@ function Editor() {
         {/* Metadata */}
         <section className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-black/40 p-5 md:grid-cols-4">
           <div>
-            <label className="block font-display text-xs uppercase tracking-widest text-white/70">
-              Name
-            </label>
+            <label className="block font-display text-xs uppercase tracking-widest text-white/70">Name</label>
             <Input
               value={draft.name}
               maxLength={60}
@@ -225,9 +320,7 @@ function Editor() {
             />
           </div>
           <div>
-            <label className="block font-display text-xs uppercase tracking-widest text-white/70">
-              Author
-            </label>
+            <label className="block font-display text-xs uppercase tracking-widest text-white/70">Author</label>
             <Input
               value={draft.authorName}
               maxLength={32}
@@ -236,14 +329,10 @@ function Editor() {
             />
           </div>
           <div>
-            <label className="block font-display text-xs uppercase tracking-widest text-white/70">
-              Difficulty
-            </label>
+            <label className="block font-display text-xs uppercase tracking-widest text-white/70">Difficulty</label>
             <select
               value={draft.difficulty}
-              onChange={(e) =>
-                setDraft({ ...draft, difficulty: e.target.value as Draft["difficulty"] })
-              }
+              onChange={(e) => setDraft({ ...draft, difficulty: e.target.value as Draft["difficulty"] })}
               className="mt-1 h-10 w-full rounded-md border border-white/10 bg-black/40 px-3 font-sans text-sm text-white"
             >
               <option>Easy</option>
@@ -287,6 +376,7 @@ function Editor() {
                   style={{ background: t.color }}
                 />
                 {t.label}
+                {t.key && <span className="ml-2 rounded bg-white/10 px-1 text-[9px]">{t.key.toUpperCase()}</span>}
               </button>
             ))}
             <button
@@ -301,9 +391,7 @@ function Editor() {
         {/* Grid */}
         <section className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4">
           <div className="mb-2 flex items-center justify-between text-xs text-white/60">
-            <span>
-              Tile {visibleStart}–{visibleStart + visibleCount} of {draft.length}
-            </span>
+            <span>Tile {visibleStart}–{visibleStart + visibleCount} of {draft.length}</span>
             <span>{draft.obstacles.length} obstacles placed</span>
           </div>
           <div
@@ -314,16 +402,9 @@ function Editor() {
           >
             <div
               className="relative"
-              style={{
-                width: draft.length * TILE_PX,
-                height: (ROWS + 2) * TILE_PX,
-              }}
+              style={{ width: draft.length * TILE_PX, height: (ROWS + 2) * TILE_PX }}
             >
-              {/* Sky/ground bands */}
-              <div
-                className="absolute inset-x-0 top-0"
-                style={{ height: ROWS * TILE_PX }}
-              />
+              <div className="absolute inset-x-0 top-0" style={{ height: ROWS * TILE_PX }} />
               <div
                 className="absolute inset-x-0"
                 style={{
@@ -334,9 +415,7 @@ function Editor() {
                   boxShadow: "0 0 12px var(--neon-pink)",
                 }}
               />
-              {/* Click overlay */}
               {Array.from({ length: ROWS + 1 }).map((_, rowIdx) => {
-                // rowIdx 0 = top, ROWS = ground row
                 const rowFromGround = ROWS - rowIdx;
                 return Array.from({ length: draft.length }).map((__, x) => {
                   const isGroundRow = rowFromGround === 0;
@@ -357,17 +436,13 @@ function Editor() {
                   );
                 });
               })}
-              {/* Render obstacles */}
               {draft.obstacles.map((o, i) => {
                 const rowFromGround = o.y ?? 0;
                 const rowIdx = ROWS - rowFromGround;
-                const tool = TOOLS.find((t) => t.id === o.type);
+                const t = TOOLS.find((x) => x.id === o.type);
                 const w = o.type === "spike3" ? TILE_PX * 3 : o.type === "platform" ? TILE_PX * 2 : TILE_PX;
                 const h = o.type === "tall" ? TILE_PX * 2 : TILE_PX;
-                const top =
-                  o.type === "tall"
-                    ? rowIdx * TILE_PX - TILE_PX
-                    : rowIdx * TILE_PX;
+                const top = o.type === "tall" ? rowIdx * TILE_PX - TILE_PX : rowIdx * TILE_PX;
                 return (
                   <div
                     key={i}
@@ -377,8 +452,8 @@ function Editor() {
                       top,
                       width: w,
                       height: o.type.startsWith("portal") ? (ROWS + 1) * TILE_PX - rowIdx * TILE_PX : h,
-                      background: tool?.color ?? "#fff",
-                      boxShadow: `0 0 8px ${tool?.color ?? "#fff"}aa`,
+                      background: t?.color ?? "#fff",
+                      boxShadow: `0 0 8px ${t?.color ?? "#fff"}aa`,
                       opacity: o.type.startsWith("portal") ? 0.55 : 0.9,
                       clipPath:
                         o.type === "spike" || o.type === "spike3"
