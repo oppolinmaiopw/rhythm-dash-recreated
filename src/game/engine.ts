@@ -581,10 +581,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
 
   // Camera shake offset (also affects HUD-overlap visually)
   let shakeX = 0, shakeY = 0;
-  if (state.shake > 0) {
-    const intensity = (state.shake / Math.max(0.001, state.shake + 0.0)) * state.shakeAmp;
-    shakeX = (Math.random() - 0.5) * 2 * intensity;
-    shakeY = (Math.random() - 0.5) * 2 * intensity;
+  if (state.shake > 0 && state.shakeAmp > 0) {
+    shakeX = (Math.random() - 0.5) * 2 * state.shakeAmp;
+    shakeY = (Math.random() - 0.5) * 2 * state.shakeAmp;
   }
   ctx.save();
   ctx.translate(shakeX, shakeY);
