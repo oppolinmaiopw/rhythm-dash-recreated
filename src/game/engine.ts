@@ -547,12 +547,17 @@ export function update(state: GameState, dt: number) {
   }
 
   if (state.flashTime > 0) state.flashTime = Math.max(0, state.flashTime - dt);
+  if (state.shake > 0) {
+    state.shake = Math.max(0, state.shake - dt);
+    if (state.shake === 0) state.shakeAmp = 0;
+  }
 }
 
 function die(state: GameState) {
   state.alive = false;
   state.flashTime = 0.25;
-  spawnParticles(state, state.px, state.py, state.skin.glow, 50);
+  spawnParticles(state, state.px, state.py, state.skin.glow, 60);
+  addShake(state, 10, 0.45);
   sfxCrash();
 }
 
