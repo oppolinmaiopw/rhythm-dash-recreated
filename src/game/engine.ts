@@ -379,6 +379,9 @@ export function update(state: GameState, dt: number) {
     state.progress = Math.min(1, state.scrollX / totalPx);
     if (state.progress >= 1) {
       state.finished = true;
+      sfxVictory();
+      addShake(state, 6, 0.4);
+      spawnParticles(state, state.px, state.py, state.skin.glow, 60);
       return;
     }
   } else {
@@ -447,7 +450,8 @@ export function update(state: GameState, dt: number) {
         state.vy = 0;
         // If switching to ground-based mode while in air, do NOT snap — let them fall
         sfxPortal();
-        spawnParticles(state, state.px, state.py, "#a78bfa", 30);
+        spawnParticles(state, state.px, state.py, "#a78bfa", 40);
+        addShake(state, 4, 0.18);
       }
       continue;
     }
@@ -455,6 +459,8 @@ export function update(state: GameState, dt: number) {
       state.gravityDir = state.gravityDir === 1 ? -1 : 1;
       state.vy = 0;
       sfxPortal();
+      spawnParticles(state, state.px, state.py, "#a78bfa", 24);
+      addShake(state, 3, 0.15);
       continue;
     }
     if (r.obstacle.type === "pad") {
@@ -463,7 +469,8 @@ export function update(state: GameState, dt: number) {
         state.onGround = false;
         state.lastPadTile = r.obstacle.x;
         sfxPad();
-        spawnParticles(state, state.px, state.py + PLAYER_SIZE / 2, "#facc15", 14);
+        spawnParticles(state, state.px, state.py + PLAYER_SIZE / 2, "#facc15", 22);
+        addShake(state, 3, 0.12);
       }
       continue;
     }
