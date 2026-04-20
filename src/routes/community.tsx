@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NeonHeader } from "@/components/NeonHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { getLikedIds, getMyPublishedIds, toggleLike } from "@/lib/progress";
 
 export const Route = createFileRoute("/community")({
   component: Community,
@@ -29,32 +31,58 @@ interface CommunityLevel {
   created_at: string;
 }
 
+type SortMode = "recent" | "popular" | "liked" | "mine";
+type DiffFilter = "all" | "Easy" | "Normal" | "Hard" | "Insane";
+
 function Community() {
   const [levels, setLevels] = useState<CommunityLevel[] | null>(null);
-  const [sort, setSort] = useState<"recent" | "popular">("recent");
+  const [sort, setSort] = useState<SortMode>("recent");
+  const [diff, setDiff] = useState<DiffFilter>("all");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [likedSet, setLikedSet] = useState<Set<string>>(() => (typeof window !== "undefined" ? getLikedIds() : new Set()));
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLevels(null);
-    supabase
+    setError(null);
+
+    const myIds = sort === "mine" ? getMyPublishedIds() : null;
+    const likedIds = sort === "liked" ? Array.from(getLikedIds()) : null;
+
+    let q = supabase
       .from("community_levels")
       .select("id,name,author_name,difficulty,length_tiles,play_count,created_at")
-      .order(sort === "recent" ? "created_at" : "play_count", { ascending: false })
-      .limit(60)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setError(error.message);
-          setLevels([]);
-          return;
-        }
-        setLevels(data ?? []);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sort]);
+      .order(sort === "popular" ? "play_count" : "created_at", { ascending: false })
+      .limit(80);
+
+    if (diff !== "all") q = q.eq("difficulty", diff);
+    if (myIds) {
+      if (myIds.length === 0) { setLevels([]); return; }
+      q = q.in("id", myIds);
+    }
+    if (likedIds) {
+      if (likedIds.length === 0) { setLevels([]); return; }
+      q = q.in("id", likedIds);
+    }
+
+    q.then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) { setError(error.message); setLevels([]); return; }
+      setLevels(data ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [sort, diff]);
+
+  const filtered = useMemo(() => {
+    if (!levels) return null;
+    const q = search.trim().toLowerCase();
+    if (!q) return levels;
+    return levels.filter(
+      (l) => l.name.toLowerCase().includes(q) || l.author_name.toLowerCase().includes(q),
+    );
+  }, [levels, search]);
 
   return (
     <div
@@ -82,22 +110,47 @@ function Community() {
           </Link>
         </div>
 
-        <div className="mt-6 inline-flex rounded-full border border-white/10 bg-black/40 p-1">
-          {(["recent", "popular"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSort(s)}
-              className={`rounded-full px-4 py-1.5 font-display text-xs uppercase tracking-widest transition-colors ${
-                sort === s ? "bg-neon-pink/20 text-white text-glow-pink" : "text-white/70"
-              }`}
-            >
-              {s === "recent" ? "Recent" : "Most played"}
-            </button>
-          ))}
+        {/* Filters */}
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="inline-flex flex-wrap rounded-full border border-white/10 bg-black/40 p-1">
+            {([
+              ["recent", "Recent"],
+              ["popular", "Most played"],
+              ["liked", "❤ Liked"],
+              ["mine", "Mine"],
+            ] as const).map(([s, label]) => (
+              <button
+                key={s}
+                onClick={() => setSort(s)}
+                className={`rounded-full px-3 py-1.5 font-display text-xs uppercase tracking-widest transition-colors ${
+                  sort === s ? "bg-neon-pink/20 text-white text-glow-pink" : "text-white/70 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={diff}
+            onChange={(e) => setDiff(e.target.value as DiffFilter)}
+            className="h-9 rounded-md border border-white/10 bg-black/40 px-3 font-display text-xs uppercase tracking-widest text-white"
+          >
+            <option value="all">All difficulty</option>
+            <option value="Easy">Easy</option>
+            <option value="Normal">Normal</option>
+            <option value="Hard">Hard</option>
+            <option value="Insane">Insane</option>
+          </select>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or author…"
+            className="h-9 max-w-xs bg-black/40 text-white"
+          />
         </div>
 
         <section className="mt-6">
-          {levels === null && (
+          {filtered === null && (
             <div className="grid gap-3 md:grid-cols-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
@@ -112,35 +165,59 @@ function Community() {
               Couldn't load community levels: {error}
             </div>
           )}
-          {levels && levels.length === 0 && !error && (
+          {filtered && filtered.length === 0 && !error && (
             <div className="rounded-2xl border border-white/10 bg-black/40 p-8 text-center text-white/70">
-              <p className="font-display text-xl uppercase tracking-widest">No levels yet</p>
-              <p className="mt-2">Be the first — open the editor and publish one.</p>
-              <Link to="/editor" className="mt-4 inline-block">
-                <Button>Open Editor</Button>
-              </Link>
+              <p className="font-display text-xl uppercase tracking-widest">
+                {sort === "mine" ? "You haven't published any levels yet" : sort === "liked" ? "No likes yet" : "No matches"}
+              </p>
+              <p className="mt-2">
+                {sort === "mine" ? "Open the editor and publish your first one." : "Try a different filter."}
+              </p>
+              {sort === "mine" && (
+                <Link to="/editor" className="mt-4 inline-block">
+                  <Button>Open Editor</Button>
+                </Link>
+              )}
             </div>
           )}
-          {levels && levels.length > 0 && (
+          {filtered && filtered.length > 0 && (
             <div className="grid gap-3 md:grid-cols-2">
-              {levels.map((lvl) => (
-                <Link
-                  key={lvl.id}
-                  to="/community/$levelId"
-                  params={{ levelId: lvl.id }}
-                  className="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/40 p-4 transition-all hover:border-neon-pink/60 hover:bg-black/60"
-                >
-                  <div className="min-w-0">
-                    <div className="font-display text-lg uppercase tracking-widest text-white group-hover:text-glow-pink truncate">
-                      {lvl.name}
-                    </div>
-                    <div className="mt-1 text-xs text-white/60">
-                      by {lvl.author_name} · {lvl.length_tiles} tiles · {lvl.play_count} plays
-                    </div>
+              {filtered.map((lvl) => {
+                const liked = likedSet.has(lvl.id);
+                return (
+                  <div
+                    key={lvl.id}
+                    className="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/40 p-4 transition-all hover:border-neon-pink/60 hover:bg-black/60"
+                  >
+                    <Link
+                      to="/community/$levelId"
+                      params={{ levelId: lvl.id }}
+                      className="min-w-0 flex-1"
+                    >
+                      <div className="font-display text-lg uppercase tracking-widest text-white group-hover:text-glow-pink truncate">
+                        {lvl.name}
+                      </div>
+                      <div className="mt-1 text-xs text-white/60">
+                        by {lvl.author_name} · {lvl.length_tiles} tiles · {lvl.play_count} plays
+                      </div>
+                    </Link>
+                    <button
+                      onClick={() => {
+                        toggleLike(lvl.id);
+                        setLikedSet(getLikedIds());
+                        setTick((x) => x + 1);
+                      }}
+                      aria-label={liked ? "Unlike" : "Like"}
+                      className={`shrink-0 rounded-full border px-3 py-2 font-display text-sm transition-colors ${
+                        liked ? "border-pink-400 bg-pink-500/20 text-pink-200" : "border-white/15 bg-white/5 text-white/60 hover:text-white"
+                      }`}
+                    >
+                      {liked ? "♥" : "♡"}
+                    </button>
+                    <DifficultyBadge difficulty={lvl.difficulty} />
                   </div>
-                  <DifficultyBadge difficulty={lvl.difficulty} />
-                </Link>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

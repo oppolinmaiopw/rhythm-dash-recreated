@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as LevelsRouteImport } from './routes/levels'
 import { Route as HowToPlayRouteImport } from './routes/how-to-play'
 import { Route as EndlessRouteImport } from './routes/endless'
@@ -19,6 +20,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayLevelIdRouteImport } from './routes/play.$levelId'
 import { Route as CommunityLevelIdRouteImport } from './routes/community.$levelId'
 
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LevelsRoute = LevelsRouteImport.update({
   id: '/levels',
   path: '/levels',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
+  '/stats': typeof StatsRoute
   '/community/$levelId': typeof CommunityLevelIdRoute
   '/play/$levelId': typeof PlayLevelIdRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
+  '/stats': typeof StatsRoute
   '/community/$levelId': typeof CommunityLevelIdRoute
   '/play/$levelId': typeof PlayLevelIdRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/endless': typeof EndlessRoute
   '/how-to-play': typeof HowToPlayRoute
   '/levels': typeof LevelsRoute
+  '/stats': typeof StatsRoute
   '/community/$levelId': typeof CommunityLevelIdRoute
   '/play/$levelId': typeof PlayLevelIdRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/endless'
     | '/how-to-play'
     | '/levels'
+    | '/stats'
     | '/community/$levelId'
     | '/play/$levelId'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/endless'
     | '/how-to-play'
     | '/levels'
+    | '/stats'
     | '/community/$levelId'
     | '/play/$levelId'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/endless'
     | '/how-to-play'
     | '/levels'
+    | '/stats'
     | '/community/$levelId'
     | '/play/$levelId'
   fileRoutesById: FileRoutesById
@@ -143,11 +155,19 @@ export interface RootRouteChildren {
   EndlessRoute: typeof EndlessRoute
   HowToPlayRoute: typeof HowToPlayRoute
   LevelsRoute: typeof LevelsRoute
+  StatsRoute: typeof StatsRoute
   PlayLevelIdRoute: typeof PlayLevelIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/levels': {
       id: '/levels'
       path: '/levels'
@@ -234,8 +254,18 @@ const rootRouteChildren: RootRouteChildren = {
   EndlessRoute: EndlessRoute,
   HowToPlayRoute: HowToPlayRoute,
   LevelsRoute: LevelsRoute,
+  StatsRoute: StatsRoute,
   PlayLevelIdRoute: PlayLevelIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
