@@ -5,7 +5,7 @@
 
 import type { LevelDef, Obstacle } from "./levels";
 import { generateEndlessObstacles } from "./levels";
-import { sfxCrash, sfxJump, sfxPad, sfxPortal } from "./audio";
+import { sfxCrash, sfxJump, sfxPad, sfxPortal, sfxVictory } from "./audio";
 import {
   drawIconPattern,
   loadSkin,
@@ -64,6 +64,8 @@ export interface GameState {
   height: number;
   lastPadTile: number;
   flashTime: number;
+  shake: number; // remaining shake time in seconds
+  shakeAmp: number; // peak px
   skin: PlayerSkin;
 }
 
@@ -94,8 +96,15 @@ export function createGame(level: LevelDef, opts: { endless?: boolean; width: nu
     height: opts.height,
     lastPadTile: -1,
     flashTime: 0,
+    shake: 0,
+    shakeAmp: 0,
     skin: loadSkin(),
   };
+}
+
+function addShake(state: GameState, amp: number, dur: number) {
+  state.shake = Math.max(state.shake, dur);
+  state.shakeAmp = Math.max(state.shakeAmp, amp);
 }
 
 export function groundPx(_h: number) {
