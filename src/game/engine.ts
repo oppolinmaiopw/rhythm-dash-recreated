@@ -42,6 +42,7 @@ export interface GameState {
   obstacles: Obstacle[];
   endless: boolean;
   endlessChunksGenerated: number;
+  startMode: GameMode;
   // Player
   px: number;
   py: number;
@@ -69,21 +70,25 @@ export interface GameState {
   skin: PlayerSkin;
 }
 
-export function createGame(level: LevelDef, opts: { endless?: boolean; width: number; height: number }): GameState {
+export function createGame(level: LevelDef, opts: { endless?: boolean; width: number; height: number; startMode?: GameMode }): GameState {
   const endless = !!opts.endless;
-  const obstacles = endless ? generateEndlessObstacles(Math.floor(Math.random() * 1e6), 12) : level.obstacles.slice();
+  const startMode: GameMode = opts.startMode ?? "cube";
+  const obstacles = endless
+    ? generateEndlessObstacles(Math.floor(Math.random() * 1e6), 12, startMode)
+    : level.obstacles.slice();
   return {
     scrollX: 0,
     obstacles,
     endless,
     endlessChunksGenerated: endless ? 12 : 0,
+    startMode,
     px: opts.width * 0.28,
     py: opts.height - groundPx(opts.height) - PLAYER_SIZE / 2,
     vy: 0,
     onGround: true,
     gravityDir: 1,
     rotation: 0,
-    mode: "cube",
+    mode: startMode,
     holding: false,
     waveTrail: [],
     alive: true,
@@ -399,7 +404,7 @@ export function update(state: GameState, dt: number) {
   } else {
     const generatedEnd = state.endlessChunksGenerated * 24 * TILE;
     if (state.scrollX + state.width * 2 > generatedEnd) {
-      const more = generateEndlessObstacles(Math.floor(Math.random() * 1e6) + state.endlessChunksGenerated, 8);
+      const more = generateEndlessObstacles(Math.floor(Math.random() * 1e6) + state.endlessChunksGenerated, 8, state.startMode);
       const offsetTiles = state.endlessChunksGenerated * 24;
       for (const o of more) state.obstacles.push({ ...o, x: o.x + offsetTiles });
       state.endlessChunksGenerated += 8;
@@ -1065,6 +1070,6 @@ function drawSwingBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSki
 }
 
 export function reset(state: GameState) {
-  const fresh = createGame(state.level, { endless: state.endless, width: state.width, height: state.height });
+  const fresh = createGame(state.level, { endless: state.endless, width: state.width, height: state.height, startMode: state.startMode });
   Object.assign(state, fresh, { attempts: state.attempts + 1 });
 }

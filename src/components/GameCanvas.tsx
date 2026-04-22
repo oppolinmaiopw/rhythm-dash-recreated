@@ -11,6 +11,7 @@ import {
   type GameState,
 } from "@/game/engine";
 import type { LevelDef } from "@/game/levels";
+import type { GameMode } from "@/game/icons";
 import {
   getMuted,
   getMusicVolume,
@@ -28,6 +29,8 @@ import { recordAttempt, recordRun, getProgress, starsForPct } from "@/lib/progre
 interface GameCanvasProps {
   level: LevelDef;
   endless?: boolean;
+  /** Starting game mode (used for endless single-mode runs). */
+  startMode?: GameMode;
   /** When true, skip persistence (used for editor playtest). */
   ephemeral?: boolean;
   onExit?: () => void;
@@ -39,7 +42,7 @@ const TRACK_MAP: Record<string, "pulse" | "rush" | "storm"> = {
   "voltage-storm": "storm",
 };
 
-export function GameCanvas({ level, endless = false, ephemeral = false, onExit }: GameCanvasProps) {
+export function GameCanvas({ level, endless = false, startMode, ephemeral = false, onExit }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<GameState | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -55,7 +58,9 @@ export function GameCanvas({ level, endless = false, ephemeral = false, onExit }
   const [bestEndless, setBestEndless] = useState(0);
   const [stars, setStars] = useState<0 | 1 | 2 | 3>(0);
 
-  const storageKey = endless ? "gd-best-endless" : `gd-best-${level.id}`;
+  const storageKey = endless
+    ? `gd-best-endless${startMode ? `-${startMode}` : ""}`
+    : `gd-best-${level.id}`;
 
   // Init
   const init = useCallback(() => {
@@ -72,10 +77,10 @@ export function GameCanvas({ level, endless = false, ephemeral = false, onExit }
     const ctx = canvas.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    stateRef.current = createGame(level, { endless, width: w, height: h });
+    stateRef.current = createGame(level, { endless, width: w, height: h, startMode });
     recordedRef.current = false;
     if (!ephemeral && !endless) recordAttempt(level.id);
-  }, [level, endless, ephemeral]);
+  }, [level, endless, ephemeral, startMode]);
 
   useEffect(() => {
     init();
