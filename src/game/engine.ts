@@ -42,6 +42,7 @@ export interface GameState {
   obstacles: Obstacle[];
   endless: boolean;
   endlessChunksGenerated: number;
+  startMode: GameMode;
   // Player
   px: number;
   py: number;
@@ -1069,6 +1070,6 @@ function drawSwingBody(ctx: CanvasRenderingContext2D, s: number, skin: PlayerSki
 }
 
 export function reset(state: GameState) {
-  const fresh = createGame(state.level, { endless: state.endless, width: state.width, height: state.height });
+  const fresh = createGame(state.level, { endless: state.endless, width: state.width, height: state.height, startMode: state.startMode });
   Object.assign(state, fresh, { attempts: state.attempts + 1 });
 }
