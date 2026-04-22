@@ -195,7 +195,18 @@ const chunks: Obstacle[][] = [
   [{ x: 4, type: "spike" }, { x: 10, type: "block" }, { x: 18, type: "spike3" }],
 ];
 
-export function generateEndlessObstacles(seed: number, chunkCount: number): Obstacle[] {
+export type EndlessMode =
+  | "cube"
+  | "ship"
+  | "ball"
+  | "ufo"
+  | "wave"
+  | "robot"
+  | "spider"
+  | "swing"
+  | "mixed";
+
+export function generateEndlessObstacles(seed: number, chunkCount: number, startMode: EndlessMode = "mixed"): Obstacle[] {
   // Deterministic LCG so increasing seed gives a stable run.
   let s = seed * 9301 + 49297;
   const rand = () => {
@@ -210,11 +221,14 @@ export function generateEndlessObstacles(seed: number, chunkCount: number): Obst
     // occasionally double up at higher difficulty
     const chunk = chunks[idx];
     for (const o of chunk) {
+      // In single-mode runs, strip random portals from chunks so the player stays in their chosen mode.
+      if (startMode !== "mixed" && o.type.startsWith("portal-")) continue;
       out.push({ ...o, x: o.x + cursor });
     }
     if (rand() < difficultyBoost) {
       const extra = chunks[Math.floor(rand() * chunks.length)];
       for (const o of extra) {
+        if (startMode !== "mixed" && o.type.startsWith("portal-")) continue;
         out.push({ ...o, x: o.x + cursor + 2 });
       }
     }
