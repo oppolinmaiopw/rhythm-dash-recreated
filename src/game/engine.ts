@@ -404,7 +404,7 @@ export function update(state: GameState, dt: number) {
   } else {
     const generatedEnd = state.endlessChunksGenerated * 24 * TILE;
     if (state.scrollX + state.width * 2 > generatedEnd) {
-      const more = generateEndlessObstacles(Math.floor(Math.random() * 1e6) + state.endlessChunksGenerated, 8);
+      const more = generateEndlessObstacles(Math.floor(Math.random() * 1e6) + state.endlessChunksGenerated, 8, state.startMode);
       const offsetTiles = state.endlessChunksGenerated * 24;
       for (const o of more) state.obstacles.push({ ...o, x: o.x + offsetTiles });
       state.endlessChunksGenerated += 8;
