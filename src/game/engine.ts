@@ -69,21 +69,25 @@ export interface GameState {
   skin: PlayerSkin;
 }
 
-export function createGame(level: LevelDef, opts: { endless?: boolean; width: number; height: number }): GameState {
+export function createGame(level: LevelDef, opts: { endless?: boolean; width: number; height: number; startMode?: GameMode }): GameState {
   const endless = !!opts.endless;
-  const obstacles = endless ? generateEndlessObstacles(Math.floor(Math.random() * 1e6), 12) : level.obstacles.slice();
+  const startMode: GameMode = opts.startMode ?? "cube";
+  const obstacles = endless
+    ? generateEndlessObstacles(Math.floor(Math.random() * 1e6), 12, startMode)
+    : level.obstacles.slice();
   return {
     scrollX: 0,
     obstacles,
     endless,
     endlessChunksGenerated: endless ? 12 : 0,
+    startMode,
     px: opts.width * 0.28,
     py: opts.height - groundPx(opts.height) - PLAYER_SIZE / 2,
     vy: 0,
     onGround: true,
     gravityDir: 1,
     rotation: 0,
-    mode: "cube",
+    mode: startMode,
     holding: false,
     waveTrail: [],
     alive: true,
