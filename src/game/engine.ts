@@ -7,7 +7,7 @@ import type { LevelDef, Obstacle } from "./levels";
 import { generateEndlessObstacles } from "./levels";
 import { sfxCrash, sfxJump, sfxPad, sfxPortal, sfxVictory } from "./audio";
 import {
-  drawIconPattern,
+  drawModePattern,
   loadSkin,
   type GameMode,
   type PlayerSkin,
