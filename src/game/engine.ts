@@ -21,16 +21,35 @@ export const GRAVITY = 2400;
 export const JUMP_VELOCITY = 880;
 export const PAD_VELOCITY = 1250;
 
-// Mode-specific constants
-const SHIP_THRUST = 3200;
-const SHIP_MAX_SPEED = 700;
-const UFO_FLAP = 700;
-const WAVE_SPEED = 520;
-const BALL_GRAVITY_MULT = 1.4;
-const ROBOT_JUMP = 760;
-const ROBOT_HOLD_BOOST = 1100; // extra upward accel while held in air
-const SPIDER_GRAVITY = 3000;
-const SWING_GRAVITY_MULT = 1.0;
+// Mode-specific constants — tuned to give every mode a distinct feel.
+// Cube: classic snappy jump (uses GRAVITY + JUMP_VELOCITY directly).
+const CUBE_GRAVITY_MULT = 1.05; // slightly punchier than default
+
+// Ship: smooth thrust, capped speed for control, mild auto-damping when not holding.
+const SHIP_THRUST = 2600;
+const SHIP_MAX_SPEED = 620;
+const SHIP_GRAVITY_MULT = 0.9;
+
+// UFO: floaty hopper. Lower gravity, softer flap so each tap feels weightless.
+const UFO_FLAP = 620;
+const UFO_GRAVITY_MULT = 0.7;
+
+// Wave: instant diagonal, faster than other modes for that "knife" feel.
+const WAVE_SPEED = 560;
+
+// Ball: heavy gravity = decisive flips, fast spin.
+const BALL_GRAVITY_MULT = 1.55;
+
+// Robot: short tap = small hop, hold = high arc. Bigger hold boost than before.
+const ROBOT_JUMP = 720;
+const ROBOT_HOLD_BOOST = 1400;
+
+// Spider: brutal gravity so snaps land instantly with no hangtime.
+const SPIDER_GRAVITY = 3400;
+
+// Swing: copter-style. Holding gives a brief hover (reduced gravity), tap flips.
+const SWING_GRAVITY_MULT = 1.1;
+const SWING_HOLD_GRAVITY_MULT = 0.35;
 
 export interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number;
