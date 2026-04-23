@@ -7,7 +7,7 @@ import {
   GAME_MODES,
   ICONS_PER_MODE,
   MODE_LABEL,
-  drawIconPattern,
+  drawModePattern,
   loadSkin,
   saveSkin,
   type GameMode,
