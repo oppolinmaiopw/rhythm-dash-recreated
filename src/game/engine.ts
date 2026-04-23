@@ -594,6 +594,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
   ctx.translate(shakeX, shakeY);
 
   drawGridBackground(ctx, state, accent);
+  drawDecorations(ctx, state, accent);
 
   // Ground
   const grad = ctx.createLinearGradient(0, groundTop, 0, h);
@@ -698,6 +699,248 @@ function drawGridBackground(ctx: CanvasRenderingContext2D, state: GameState, acc
     ctx.lineTo(w, y);
     ctx.stroke();
   }
+}
+
+function drawDecorations(ctx: CanvasRenderingContext2D, state: GameState, accent: string) {
+  const w = state.width;
+  const h = state.height;
+  const groundTop = h - groundPx(state.height);
+  const theme = state.level.decoration ?? "mountains";
+  ctx.save();
+  switch (theme) {
+    case "mountains": {
+      // Two parallax layers of triangular peaks
+      const drawLayer = (parallax: number, baseY: number, amp: number, spacing: number, alpha: number, color: string) => {
+        const offset = (state.scrollX * parallax) % spacing;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = alpha;
+        for (let x = -offset; x < w + spacing; x += spacing) {
+          ctx.beginPath();
+          ctx.moveTo(x, baseY);
+          ctx.lineTo(x + spacing / 2, baseY - amp);
+          ctx.lineTo(x + spacing, baseY);
+          ctx.closePath();
+          ctx.fill();
+        }
+      };
+      drawLayer(0.15, groundTop, 90, 200, 0.18, accent);
+      drawLayer(0.3, groundTop, 60, 130, 0.28, "#ffffff");
+      break;
+    }
+    case "city": {
+      // Skyline of buildings with lit windows
+      const drawSkyline = (parallax: number, baseY: number, alpha: number, color: string) => {
+        const spacing = 70;
+        const offset = (state.scrollX * parallax) % spacing;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        for (let i = 0; i < Math.ceil(w / spacing) + 2; i++) {
+          const x = -offset + i * spacing;
+          // pseudo-random height per slot
+          const seed = Math.floor((state.scrollX * parallax) / spacing) + i;
+          const hh = 60 + ((seed * 9301 + 49297) % 90);
+          ctx.fillRect(x + 4, baseY - hh, spacing - 8, hh);
+          // windows
+          ctx.fillStyle = accent;
+          for (let wy = baseY - hh + 8; wy < baseY - 8; wy += 12) {
+            for (let wx = x + 10; wx < x + spacing - 10; wx += 10) {
+              if (((seed + wx + wy) % 3) === 0) ctx.fillRect(wx, wy, 4, 4);
+            }
+          }
+          ctx.fillStyle = color;
+        }
+      };
+      drawSkyline(0.2, groundTop, 0.35, "rgba(8,4,20,0.95)");
+      drawSkyline(0.45, groundTop, 0.6, "rgba(0,0,0,0.92)");
+      break;
+    }
+    case "stars": {
+      // Static star field with slow parallax
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 80; i++) {
+        const seed = i * 9301 + 49297;
+        const px = ((seed % 1000) / 1000) * w;
+        const py = (((seed * 17) % 1000) / 1000) * groundTop;
+        const off = (state.scrollX * 0.05 + (seed % 200)) % w;
+        const sx = (px - off + w) % w;
+        const size = 1 + (seed % 3);
+        ctx.globalAlpha = 0.4 + ((seed % 100) / 200);
+        ctx.fillRect(sx, py, size, size);
+      }
+      // a moon
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = accent;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 30;
+      ctx.beginPath();
+      ctx.arc(w * 0.8, h * 0.18, 28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case "waves": {
+      // Sine waves in background
+      for (let layer = 0; layer < 3; layer++) {
+        const parallax = 0.1 + layer * 0.15;
+        const amp = 18 + layer * 10;
+        const yBase = groundTop - 40 - layer * 30;
+        ctx.globalAlpha = 0.18 + layer * 0.1;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 6) {
+          const y = yBase + Math.sin((x + state.scrollX * parallax) * 0.02) * amp;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case "circuit": {
+      // Glowing horizontal traces with nodes
+      const spacing = 80;
+      const offset = (state.scrollX * 0.4) % spacing;
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 8;
+      for (let row = 1; row < 5; row++) {
+        const y = (groundTop / 5) * row;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        for (let x = -offset; x < w + spacing; x += spacing) {
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = accent;
+          ctx.fill();
+        }
+      }
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case "pyramids": {
+      // Sharp neon triangles
+      const spacing = 160;
+      const offset = (state.scrollX * 0.25) % spacing;
+      ctx.globalAlpha = 0.25;
+      for (let x = -offset; x < w + spacing; x += spacing) {
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.moveTo(x, groundTop);
+        ctx.lineTo(x + spacing / 2, groundTop - 110);
+        ctx.lineTo(x + spacing, groundTop);
+        ctx.closePath();
+        ctx.fill();
+        // inner darker triangle
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.beginPath();
+        ctx.moveTo(x + 20, groundTop);
+        ctx.lineTo(x + spacing / 2, groundTop - 80);
+        ctx.lineTo(x + spacing - 20, groundTop);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+    case "rain": {
+      // Diagonal rain streaks
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.35;
+      const t = state.scrollX * 0.6;
+      for (let i = 0; i < 60; i++) {
+        const seed = i * 9973 + 31;
+        const x = ((seed + t) % (w + 100)) - 50;
+        const y = ((seed * 7 + t * 1.5) % (groundTop + 100)) - 50;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 6, y + 14);
+        ctx.stroke();
+      }
+      break;
+    }
+    case "trees": {
+      // Pine tree silhouettes
+      const spacing = 90;
+      const offset = (state.scrollX * 0.3) % spacing;
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.globalAlpha = 0.7;
+      for (let x = -offset; x < w + spacing; x += spacing) {
+        const baseY = groundTop;
+        const treeH = 70;
+        ctx.beginPath();
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(x + spacing / 2, baseY - treeH);
+        ctx.lineTo(x + spacing, baseY);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+    case "crystals": {
+      // Floating diamond crystals
+      const spacing = 130;
+      const offset = (state.scrollX * 0.35) % spacing;
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = accent;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 14;
+      for (let x = -offset; x < w + spacing; x += spacing) {
+        const seed = Math.floor((state.scrollX * 0.35 + x) / spacing);
+        const cy = (groundTop * 0.3) + ((seed % 100) / 100) * (groundTop * 0.4);
+        const sz = 14 + (seed % 8);
+        ctx.beginPath();
+        ctx.moveTo(x, cy - sz);
+        ctx.lineTo(x + sz, cy);
+        ctx.lineTo(x, cy + sz);
+        ctx.lineTo(x - sz, cy);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case "skull": {
+      // Giant ominous skull silhouette pulsing in the distance
+      ctx.globalAlpha = 0.18 + 0.08 * Math.sin(state.scrollX * 0.01);
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 30;
+      const cx = w * 0.78 + Math.sin(state.scrollX * 0.002) * 20;
+      const cy = h * 0.32;
+      const sz = 110;
+      // cranium
+      ctx.beginPath();
+      ctx.arc(cx, cy, sz, Math.PI, 0);
+      ctx.lineTo(cx + sz * 0.7, cy + sz * 0.6);
+      ctx.lineTo(cx - sz * 0.7, cy + sz * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      // jaw
+      ctx.fillRect(cx - sz * 0.45, cy + sz * 0.6, sz * 0.9, sz * 0.25);
+      // eyes
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(cx - sz * 0.35, cy + sz * 0.05, sz * 0.18, 0, Math.PI * 2);
+      ctx.arc(cx + sz * 0.35, cy + sz * 0.05, sz * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // glowing eye dots
+      ctx.fillStyle = accent;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(cx - sz * 0.35, cy + sz * 0.05, 4, 0, Math.PI * 2);
+      ctx.arc(cx + sz * 0.35, cy + sz * 0.05, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      break;
+    }
+  }
+  ctx.restore();
 }
 
 function portalColors(type: string): { ring: string; label: string } {
