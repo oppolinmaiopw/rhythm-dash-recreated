@@ -71,11 +71,13 @@ function PlayCommunity() {
           id: row.id,
           name: row.name,
           difficulty: (row.difficulty as LevelDef["difficulty"]) ?? "Normal",
+          difficultyStars: (row.difficulty === "Easy" ? 1 : row.difficulty === "Hard" ? 3 : 2) as 1 | 2 | 3,
           bg: difficultyToBg(row.difficulty),
           accent: "var(--neon-pink)",
           bpm: difficultyToBpm(row.difficulty),
           length: row.length_tiles,
           obstacles,
+          decoration: "stars",
         });
         // Fire-and-forget play count increment
         supabase.rpc("increment_level_play_count", { level_id: row.id });
