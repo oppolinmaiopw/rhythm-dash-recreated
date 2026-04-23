@@ -21,16 +21,35 @@ export const GRAVITY = 2400;
 export const JUMP_VELOCITY = 880;
 export const PAD_VELOCITY = 1250;
 
-// Mode-specific constants
-const SHIP_THRUST = 3200;
-const SHIP_MAX_SPEED = 700;
-const UFO_FLAP = 700;
-const WAVE_SPEED = 520;
-const BALL_GRAVITY_MULT = 1.4;
-const ROBOT_JUMP = 760;
-const ROBOT_HOLD_BOOST = 1100; // extra upward accel while held in air
-const SPIDER_GRAVITY = 3000;
-const SWING_GRAVITY_MULT = 1.0;
+// Mode-specific constants — tuned to give every mode a distinct feel.
+// Cube: classic snappy jump (uses GRAVITY + JUMP_VELOCITY directly).
+const CUBE_GRAVITY_MULT = 1.05; // slightly punchier than default
+
+// Ship: smooth thrust, capped speed for control, mild auto-damping when not holding.
+const SHIP_THRUST = 2600;
+const SHIP_MAX_SPEED = 620;
+const SHIP_GRAVITY_MULT = 0.9;
+
+// UFO: floaty hopper. Lower gravity, softer flap so each tap feels weightless.
+const UFO_FLAP = 620;
+const UFO_GRAVITY_MULT = 0.7;
+
+// Wave: instant diagonal, faster than other modes for that "knife" feel.
+const WAVE_SPEED = 560;
+
+// Ball: heavy gravity = decisive flips, fast spin.
+const BALL_GRAVITY_MULT = 1.55;
+
+// Robot: short tap = small hop, hold = high arc. Bigger hold boost than before.
+const ROBOT_JUMP = 720;
+const ROBOT_HOLD_BOOST = 1400;
+
+// Spider: brutal gravity so snaps land instantly with no hangtime.
+const SPIDER_GRAVITY = 3400;
+
+// Swing: copter-style. Holding gives a brief hover (reduced gravity), tap flips.
+const SWING_GRAVITY_MULT = 1.1;
+const SWING_HOLD_GRAVITY_MULT = 0.35;
 
 export interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number;
@@ -343,11 +362,14 @@ function modeFromPortal(type: Obstacle["type"]): GameMode | null {
 
 function applyModePhysics(state: GameState, dt: number) {
   switch (state.mode) {
-    case "cube":
+    case "cube": {
+      state.vy += GRAVITY * CUBE_GRAVITY_MULT * state.gravityDir * dt;
+      break;
+    }
     case "robot": {
       let g = GRAVITY;
-      if (state.mode === "robot" && state.holding && !state.onGround && state.vy * state.gravityDir < 0) {
-        // While holding & moving up, reduce effective gravity for higher jump
+      if (state.holding && !state.onGround && state.vy * state.gravityDir < 0) {
+        // While holding & moving up, reduce effective gravity for a higher arc.
         g -= ROBOT_HOLD_BOOST;
       }
       state.vy += g * state.gravityDir * dt;
@@ -362,25 +384,31 @@ function applyModePhysics(state: GameState, dt: number) {
       break;
     }
     case "ship": {
-      // hold = thrust opposite gravity
-      const dir = state.holding ? -state.gravityDir : state.gravityDir;
-      state.vy += SHIP_THRUST * dir * dt;
-      // clamp
+      // hold = thrust opposite gravity; otherwise gentle gravity pulls you back.
+      if (state.holding) {
+        state.vy += -SHIP_THRUST * state.gravityDir * dt;
+      } else {
+        state.vy += GRAVITY * SHIP_GRAVITY_MULT * state.gravityDir * dt;
+        // Mild damping so the ship feels controllable when coasting.
+        state.vy *= Math.pow(0.92, dt * 60);
+      }
       if (state.vy > SHIP_MAX_SPEED) state.vy = SHIP_MAX_SPEED;
       if (state.vy < -SHIP_MAX_SPEED) state.vy = -SHIP_MAX_SPEED;
       break;
     }
     case "ufo": {
-      state.vy += GRAVITY * 0.85 * state.gravityDir * dt;
+      state.vy += GRAVITY * UFO_GRAVITY_MULT * state.gravityDir * dt;
       break;
     }
     case "wave": {
-      // diagonal: vy = ±WAVE_SPEED based on holding
+      // Pure diagonal — vy is locked to ±WAVE_SPEED based on input.
       state.vy = state.holding ? -WAVE_SPEED * state.gravityDir : WAVE_SPEED * state.gravityDir;
       break;
     }
     case "swing": {
-      state.vy += GRAVITY * SWING_GRAVITY_MULT * state.gravityDir * dt;
+      // Holding briefly lightens gravity for a copter-like hover.
+      const mult = state.holding ? SWING_HOLD_GRAVITY_MULT : SWING_GRAVITY_MULT;
+      state.vy += GRAVITY * mult * state.gravityDir * dt;
       break;
     }
   }
@@ -515,29 +543,48 @@ export function update(state: GameState, dt: number) {
 
   state.onGround = landed;
 
-  // Rotation
-  if (state.mode === "cube" || state.mode === "robot") {
+  // Rotation — distinct feel per mode.
+  if (state.mode === "cube") {
     if (state.onGround) {
       const target = Math.round(state.rotation / (Math.PI / 2)) * (Math.PI / 2);
-      state.rotation += (target - state.rotation) * Math.min(1, dt * 18);
+      state.rotation += (target - state.rotation) * Math.min(1, dt * 22);
     } else {
-      state.rotation += dt * 7 * state.gravityDir;
+      state.rotation += dt * 8 * state.gravityDir;
     }
-  } else if (state.mode === "ship" || state.mode === "wave") {
-    // Tilt based on vy
-    const target = Math.max(-0.6, Math.min(0.6, state.vy / 800));
-    state.rotation += (target - state.rotation) * Math.min(1, dt * 14);
-  } else if (state.mode === "ball" || state.mode === "spider" || state.mode === "swing") {
-    state.rotation += dt * 8 * state.gravityDir;
+  } else if (state.mode === "robot") {
+    // Robot: heavier, slower spin to feel mechanical.
+    if (state.onGround) {
+      const target = Math.round(state.rotation / (Math.PI / 2)) * (Math.PI / 2);
+      state.rotation += (target - state.rotation) * Math.min(1, dt * 14);
+    } else {
+      state.rotation += dt * 4 * state.gravityDir;
+    }
+  } else if (state.mode === "ship") {
+    // Ship: pronounced pitch from vertical velocity.
+    const target = Math.max(-0.7, Math.min(0.7, state.vy / 700)) * state.gravityDir;
+    state.rotation += (target - state.rotation) * Math.min(1, dt * 16);
+  } else if (state.mode === "wave") {
+    // Wave: hard 45° lock based on direction (no easing — knife-feel).
+    state.rotation = (state.holding ? -0.78 : 0.78) * state.gravityDir;
+  } else if (state.mode === "ball") {
+    // Ball: spin proportional to scroll, faster than passive rotators.
+    state.rotation += dt * 12 * state.gravityDir;
+  } else if (state.mode === "spider") {
+    // Spider: snap-rotate toward upright orientation; barely spins otherwise.
+    const target = state.gravityDir === 1 ? 0 : Math.PI;
+    state.rotation += (target - state.rotation) * Math.min(1, dt * 24);
+  } else if (state.mode === "swing") {
+    // Swing: gentler rotation, kicks when input held.
+    state.rotation += dt * (state.holding ? 10 : 5) * state.gravityDir;
   } else if (state.mode === "ufo") {
-    const target = Math.max(-0.3, Math.min(0.3, state.vy / 1200));
-    state.rotation += (target - state.rotation) * Math.min(1, dt * 12);
+    const target = Math.max(-0.25, Math.min(0.25, state.vy / 1400)) * state.gravityDir;
+    state.rotation += (target - state.rotation) * Math.min(1, dt * 10);
   }
 
-  // Wave trail
+  // Wave trail — longer ribbon now that wave is faster.
   if (state.mode === "wave") {
     state.waveTrail.push({ x: state.scrollX + state.px, y: state.py });
-    if (state.waveTrail.length > 80) state.waveTrail.shift();
+    if (state.waveTrail.length > 110) state.waveTrail.shift();
   } else if (state.waveTrail.length) {
     state.waveTrail.length = 0;
   }
