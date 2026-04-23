@@ -820,7 +820,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
   switch (state.mode) {
     case "cube": {
       drawCubeBody(ctx, s, skin);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       break;
     }
     case "robot": {
@@ -828,7 +828,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
       ctx.save();
       ctx.translate(0, -3);
       ctx.scale(0.8, 0.8);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       ctx.restore();
       break;
     }
@@ -836,7 +836,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
       drawShipBody(ctx, s, skin);
       ctx.save();
       ctx.scale(0.7, 0.7);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       ctx.restore();
       break;
     }
@@ -844,7 +844,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
       drawBallBody(ctx, s, skin);
       ctx.save();
       ctx.scale(0.85, 0.85);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       ctx.restore();
       break;
     }
@@ -853,7 +853,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
       ctx.save();
       ctx.translate(0, -2);
       ctx.scale(0.6, 0.6);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       ctx.restore();
       break;
     }
@@ -865,7 +865,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
       drawSpiderBody(ctx, s, skin);
       ctx.save();
       ctx.scale(0.8, 0.8);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       ctx.restore();
       break;
     }
@@ -873,7 +873,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
       drawSwingBody(ctx, s, skin);
       ctx.save();
       ctx.scale(0.75, 0.75);
-      drawIconPattern(ctx, pattern, s, skin);
+      drawModePattern(ctx, state.mode, pattern, s, skin);
       ctx.restore();
       break;
     }
