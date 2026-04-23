@@ -362,11 +362,14 @@ function modeFromPortal(type: Obstacle["type"]): GameMode | null {
 
 function applyModePhysics(state: GameState, dt: number) {
   switch (state.mode) {
-    case "cube":
+    case "cube": {
+      state.vy += GRAVITY * CUBE_GRAVITY_MULT * state.gravityDir * dt;
+      break;
+    }
     case "robot": {
       let g = GRAVITY;
-      if (state.mode === "robot" && state.holding && !state.onGround && state.vy * state.gravityDir < 0) {
-        // While holding & moving up, reduce effective gravity for higher jump
+      if (state.holding && !state.onGround && state.vy * state.gravityDir < 0) {
+        // While holding & moving up, reduce effective gravity for a higher arc.
         g -= ROBOT_HOLD_BOOST;
       }
       state.vy += g * state.gravityDir * dt;
@@ -381,25 +384,31 @@ function applyModePhysics(state: GameState, dt: number) {
       break;
     }
     case "ship": {
-      // hold = thrust opposite gravity
-      const dir = state.holding ? -state.gravityDir : state.gravityDir;
-      state.vy += SHIP_THRUST * dir * dt;
-      // clamp
+      // hold = thrust opposite gravity; otherwise gentle gravity pulls you back.
+      if (state.holding) {
+        state.vy += -SHIP_THRUST * state.gravityDir * dt;
+      } else {
+        state.vy += GRAVITY * SHIP_GRAVITY_MULT * state.gravityDir * dt;
+        // Mild damping so the ship feels controllable when coasting.
+        state.vy *= Math.pow(0.92, dt * 60);
+      }
       if (state.vy > SHIP_MAX_SPEED) state.vy = SHIP_MAX_SPEED;
       if (state.vy < -SHIP_MAX_SPEED) state.vy = -SHIP_MAX_SPEED;
       break;
     }
     case "ufo": {
-      state.vy += GRAVITY * 0.85 * state.gravityDir * dt;
+      state.vy += GRAVITY * UFO_GRAVITY_MULT * state.gravityDir * dt;
       break;
     }
     case "wave": {
-      // diagonal: vy = ±WAVE_SPEED based on holding
+      // Pure diagonal — vy is locked to ±WAVE_SPEED based on input.
       state.vy = state.holding ? -WAVE_SPEED * state.gravityDir : WAVE_SPEED * state.gravityDir;
       break;
     }
     case "swing": {
-      state.vy += GRAVITY * SWING_GRAVITY_MULT * state.gravityDir * dt;
+      // Holding briefly lightens gravity for a copter-like hover.
+      const mult = state.holding ? SWING_HOLD_GRAVITY_MULT : SWING_GRAVITY_MULT;
+      state.vy += GRAVITY * mult * state.gravityDir * dt;
       break;
     }
   }
