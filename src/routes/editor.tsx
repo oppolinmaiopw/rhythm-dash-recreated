@@ -199,11 +199,13 @@ function Editor() {
       id: "playtest-" + Math.random().toString(36).slice(2, 8),
       name: draft.name || "Playtest",
       difficulty: (draft.difficulty as LevelDef["difficulty"]) ?? "Normal",
+      difficultyStars: (draft.difficulty === "Easy" ? 1 : draft.difficulty === "Hard" ? 3 : 2) as 1 | 2 | 3,
       bg: difficultyToBg(draft.difficulty),
       accent: "var(--neon-pink)",
       bpm: difficultyToBpm(draft.difficulty),
       length: draft.length,
       obstacles: draft.obstacles,
+      decoration: "stars",
     }),
     [draft],
   );

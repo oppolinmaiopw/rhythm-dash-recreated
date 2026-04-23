@@ -32,6 +32,27 @@ function StarRow({ filled }: { filled: 0 | 1 | 2 | 3 }) {
   );
 }
 
+function DifficultyStars({ count }: { count: 1 | 2 | 3 }) {
+  const colors = ["#4ade80", "#facc15", "#f87171"]; // green, yellow, red
+  const color = colors[count - 1];
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          style={
+            i < count
+              ? { color, textShadow: `0 0 6px ${color}` }
+              : { color: "rgba(255,255,255,0.2)" }
+          }
+        >
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function Levels() {
   return (
     <div
@@ -70,13 +91,18 @@ function Levels() {
                 style={{ background: lvl.bg }}
               >
                 <div>
-                  <div className="font-display text-xs uppercase tracking-widest text-white/80">
-                    {lvl.difficulty} · {lvl.bpm} BPM
+                  <div className="flex items-center gap-2 font-display text-xs uppercase tracking-widest text-white/80">
+                    <span>{lvl.difficulty}</span>
+                    <DifficultyStars count={lvl.difficultyStars} />
+                    <span className="text-white/50">· {lvl.bpm} BPM</span>
                   </div>
                   <div className="mt-2 font-display text-3xl uppercase text-white text-glow-pink">
                     {lvl.name}
                   </div>
-                  <div className="mt-2"><StarRow filled={p.stars} /></div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <StarRow filled={p.stars} />
+                    <span className="font-display text-[10px] uppercase tracking-widest text-white/50">earned</span>
+                  </div>
                 </div>
                 <div>
                   <div className="mb-3 h-2 overflow-hidden rounded-full bg-black/40">
