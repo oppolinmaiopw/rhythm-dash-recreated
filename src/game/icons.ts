@@ -35,21 +35,17 @@ export const MODE_LABEL: Record<GameMode, string> = {
 };
 
 export interface IconStyle {
-  // Pattern id determines how it's drawn on the cube/ship/etc.
-  // 0..11 — 12 styles per mode.
   pattern: number;
 }
 
-// 12 icons per mode = 96 total presets. Each pattern is rendered by
-// drawIconBody below. The visual differences are pattern-only; the silhouette
-// for each mode (cube, ship, etc.) is drawn around the pattern.
+// 12 unique icons per mode. Each mode has its own pattern set in iconPatterns.ts.
 export const ICONS_PER_MODE = 12;
 
 export interface PlayerSkin {
-  primary: string;   // body main color
-  secondary: string; // accent
-  glow: string;      // glow color
-  icons: Record<GameMode, number>; // selected pattern per mode
+  primary: string;
+  secondary: string;
+  glow: string;
+  icons: Record<GameMode, number>;
 }
 
 const DEFAULT_SKIN: PlayerSkin = {
@@ -106,166 +102,18 @@ export const COLOR_PRESETS: { name: string; primary: string; secondary: string; 
   { name: "Mono",      primary: "#f3f4f6", secondary: "#6b7280", glow: "#d1d5db" },
 ];
 
-// Draw a pattern decoration inside an arbitrary box. Patterns 0..11.
-// All patterns assume ctx is already translated/rotated to the body center,
-// and box ranges from (-s/2,-s/2) to (s/2,s/2).
+// Per-mode patterns live in ./iconPatterns. Re-export the dispatcher so existing
+// imports from "@/game/icons" keep working.
+export { drawModePattern } from "./iconPatterns";
+
+// Back-compat shim: legacy callers used drawIconPattern without mode context.
+// Routes through the cube pattern set so existing screens still render something.
+import { drawModePattern } from "./iconPatterns";
 export function drawIconPattern(
   ctx: CanvasRenderingContext2D,
   pattern: number,
   s: number,
   skin: PlayerSkin,
 ) {
-  const half = s / 2;
-  ctx.save();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  switch (pattern % 12) {
-    case 0: {
-      // Classic face
-      ctx.fillRect(-half + 8, -half + 10, 6, 6);
-      ctx.fillRect(half - 14, -half + 10, 6, 6);
-      ctx.fillRect(-half + 10, half - 14, s - 20, 4);
-      break;
-    }
-    case 1: {
-      // Visor band
-      ctx.fillStyle = skin.secondary;
-      ctx.fillRect(-half + 4, -4, s - 8, 8);
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.fillRect(-half + 8, -2, 4, 4);
-      ctx.fillRect(half - 12, -2, 4, 4);
-      break;
-    }
-    case 2: {
-      // Diagonal stripes
-      ctx.strokeStyle = skin.secondary;
-      ctx.lineWidth = 4;
-      for (let i = -s; i < s; i += 8) {
-        ctx.beginPath();
-        ctx.moveTo(i, -half);
-        ctx.lineTo(i + s, half);
-        ctx.stroke();
-      }
-      break;
-    }
-    case 3: {
-      // Concentric squares
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      for (let i = 4; i < half; i += 5) {
-        ctx.strokeRect(-i, -i, i * 2, i * 2);
-      }
-      break;
-    }
-    case 4: {
-      // Smile
-      ctx.fillRect(-half + 9, -half + 11, 5, 5);
-      ctx.fillRect(half - 14, -half + 11, 5, 5);
-      ctx.beginPath();
-      ctx.arc(0, 4, half - 12, 0, Math.PI);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(255,255,255,0.95)";
-      ctx.stroke();
-      break;
-    }
-    case 5: {
-      // Triangle ascendant
-      ctx.fillStyle = skin.secondary;
-      ctx.beginPath();
-      ctx.moveTo(0, -half + 6);
-      ctx.lineTo(half - 6, half - 6);
-      ctx.lineTo(-half + 6, half - 6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.95)";
-      ctx.stroke();
-      break;
-    }
-    case 6: {
-      // Star
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      drawStar(ctx, 0, 0, half - 6, half / 2.4, 5);
-      break;
-    }
-    case 7: {
-      // Circuit
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-half + 4, 0); ctx.lineTo(0, 0); ctx.lineTo(0, -half + 4);
-      ctx.moveTo(0, 0); ctx.lineTo(half - 4, half - 4);
-      ctx.stroke();
-      ctx.fillStyle = skin.secondary;
-      ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(half - 4, half - 4, 3, 0, Math.PI * 2); ctx.fill();
-      break;
-    }
-    case 8: {
-      // Heart
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      drawHeart(ctx, 0, 0, half - 6);
-      break;
-    }
-    case 9: {
-      // Skull dots
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(-half + 8, -half + 12, 6, 6);
-      ctx.fillRect(half - 14, -half + 12, 6, 6);
-      ctx.fillRect(-half + 8, half - 12, 4, 4);
-      ctx.fillRect(-half + 14, half - 12, 4, 4);
-      ctx.fillRect(half - 12, half - 12, 4, 4);
-      ctx.fillRect(half - 18, half - 12, 4, 4);
-      break;
-    }
-    case 10: {
-      // Cross hatch
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
-      ctx.lineWidth = 1;
-      for (let i = -s; i < s; i += 5) {
-        ctx.beginPath(); ctx.moveTo(i, -half); ctx.lineTo(i + s, half); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(i, half); ctx.lineTo(i + s, -half); ctx.stroke();
-      }
-      break;
-    }
-    case 11: {
-      // Bolt
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.beginPath();
-      ctx.moveTo(-2, -half + 4);
-      ctx.lineTo(half - 8, -2);
-      ctx.lineTo(2, 2);
-      ctx.lineTo(half - 4, half - 4);
-      ctx.lineTo(-half + 6, 4);
-      ctx.lineTo(2, 0);
-      ctx.lineTo(-half + 4, -half + 8);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    }
-  }
-  ctx.restore();
-}
-
-function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, outer: number, inner: number, points: number) {
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 === 0 ? outer : inner;
-    const a = (i * Math.PI) / points - Math.PI / 2;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
-  ctx.beginPath();
-  const top = cy - size / 4;
-  ctx.moveTo(cx, cy + size / 2);
-  ctx.bezierCurveTo(cx + size, cy, cx + size / 2, top - size / 2, cx, top);
-  ctx.bezierCurveTo(cx - size / 2, top - size / 2, cx - size, cy, cx, cy + size / 2);
-  ctx.closePath();
-  ctx.fill();
+  drawModePattern(ctx, "cube", pattern, s, skin);
 }

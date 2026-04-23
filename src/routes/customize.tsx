@@ -7,7 +7,7 @@ import {
   GAME_MODES,
   ICONS_PER_MODE,
   MODE_LABEL,
-  drawIconPattern,
+  drawModePattern,
   loadSkin,
   saveSkin,
   type GameMode,
@@ -186,7 +186,7 @@ function IconPreview({ mode, pattern, skin }: { mode: GameMode; pattern: number;
     ctx.shadowBlur = 16;
     drawModeBody(ctx, mode, s, skin);
     ctx.shadowBlur = 0;
-    drawIconPattern(ctx, pattern, s, skin);
+    drawModePattern(ctx, mode, pattern, s, skin);
     ctx.restore();
   }, [mode, pattern, skin]);
   return <canvas ref={ref} className="h-full w-full" />;
