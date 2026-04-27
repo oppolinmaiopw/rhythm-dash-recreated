@@ -339,7 +339,14 @@ function obstacleRects(state: GameState): ObstacleRect[] {
         break;
       }
       case "coin": {
-        // Decorative collectible — no collision rect (handled separately if needed).
+        // Visual only — provide a small rect for rendering, no collision side effects.
+        const yTiles = o.y ?? 3;
+        const cy = groundTop - yTiles * TILE;
+        rects.push({
+          left: ox + 8, right: ox + TILE - 8,
+          top: cy - 10, bottom: cy + 10,
+          lethal: false, landable: false, obstacle: o,
+        });
         break;
       }
       case "platform": {
