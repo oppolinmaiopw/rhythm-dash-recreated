@@ -1067,6 +1067,23 @@ function drawObstacle(
       ctx.stroke();
       break;
     }
+    case "spike-ceil":
+    case "spike3-ceil": {
+      // Inverted spike — apex points down
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w / 2, y + h);
+      ctx.lineTo(x + w, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      break;
+    }
     case "block":
     case "tall": {
       const grad = ctx.createLinearGradient(x, y, x, y + h);
