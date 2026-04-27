@@ -285,7 +285,7 @@ function buildCampaign(seed: number, segments: { mode: keyof typeof MODE_CHUNKS;
       cursor += 4;
     }
     const e = emitMode(seg.mode, cursor, seg.chunks, seed + i * 13);
-    all.push(...e.obstacces ?? e.obstacles);
+    all.push(...e.obstacles);
     cursor = e.end + 2;
   }
   return { obstacles: all, length: cursor + 8 };
