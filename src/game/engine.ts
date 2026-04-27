@@ -1085,7 +1085,9 @@ function drawObstacle(
       break;
     }
     case "block":
-    case "tall": {
+    case "tall":
+    case "block-ceil":
+    case "tall-ceil": {
       const grad = ctx.createLinearGradient(x, y, x, y + h);
       grad.addColorStop(0, "rgba(255,255,255,0.95)");
       grad.addColorStop(1, "rgba(255,255,255,0.7)");
@@ -1097,6 +1099,27 @@ function drawObstacle(
       ctx.strokeStyle = accent;
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      break;
+    }
+    case "coin": {
+      // Decorative golden coin with pulse
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 9px 'Russo One', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("$", cx, cy + 1);
       break;
     }
     case "platform": {
