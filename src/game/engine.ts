@@ -288,6 +288,24 @@ function obstacleRects(state: GameState): ObstacleRect[] {
         }
         break;
       }
+      case "spike-ceil": {
+        rects.push({
+          left: ox + 6, right: ox + TILE - 6,
+          top: 0, bottom: TILE - 8,
+          lethal: true, landable: false, obstacle: o,
+        });
+        break;
+      }
+      case "spike3-ceil": {
+        for (let i = 0; i < 3; i++) {
+          rects.push({
+            left: ox + i * TILE + 6, right: ox + i * TILE + TILE - 6,
+            top: 0, bottom: TILE - 8,
+            lethal: true, landable: false, obstacle: o,
+          });
+        }
+        break;
+      }
       case "block": {
         rects.push({
           left: ox, right: ox + TILE,
@@ -301,6 +319,33 @@ function obstacleRects(state: GameState): ObstacleRect[] {
           left: ox, right: ox + TILE,
           top: groundTop - TILE * 2, bottom: groundTop,
           lethal: false, landable: true, obstacle: o,
+        });
+        break;
+      }
+      case "block-ceil": {
+        rects.push({
+          left: ox, right: ox + TILE,
+          top: 0, bottom: TILE,
+          lethal: false, landable: true, obstacle: o,
+        });
+        break;
+      }
+      case "tall-ceil": {
+        rects.push({
+          left: ox, right: ox + TILE,
+          top: 0, bottom: TILE * 2,
+          lethal: false, landable: true, obstacle: o,
+        });
+        break;
+      }
+      case "coin": {
+        // Visual only — provide a small rect for rendering, no collision side effects.
+        const yTiles = o.y ?? 3;
+        const cy = groundTop - yTiles * TILE;
+        rects.push({
+          left: ox + 8, right: ox + TILE - 8,
+          top: cy - 10, bottom: cy + 10,
+          lethal: false, landable: false, obstacle: o,
         });
         break;
       }
@@ -1029,8 +1074,27 @@ function drawObstacle(
       ctx.stroke();
       break;
     }
+    case "spike-ceil":
+    case "spike3-ceil": {
+      // Inverted spike — apex points down
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w / 2, y + h);
+      ctx.lineTo(x + w, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      break;
+    }
     case "block":
-    case "tall": {
+    case "tall":
+    case "block-ceil":
+    case "tall-ceil": {
       const grad = ctx.createLinearGradient(x, y, x, y + h);
       grad.addColorStop(0, "rgba(255,255,255,0.95)");
       grad.addColorStop(1, "rgba(255,255,255,0.7)");
@@ -1042,6 +1106,27 @@ function drawObstacle(
       ctx.strokeStyle = accent;
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      break;
+    }
+    case "coin": {
+      // Decorative golden coin with pulse
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      ctx.fillStyle = "#facc15";
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 9px 'Russo One', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("$", cx, cy + 1);
       break;
     }
     case "platform": {
