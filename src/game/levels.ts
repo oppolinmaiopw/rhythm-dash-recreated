@@ -1,23 +1,30 @@
-// Level definitions for the runner.
-// Obstacle types:
-//  - "spike": triangular spike (lethal on contact)
-//  - "block": square block to land on (lethal on side hit)
-//  - "tall": tall block (2 high)
-//  - "spike3": three spikes in a row
-//  - "platform": floating platform at given y offset (in tiles above ground)
-//  - "portal-grav": flips gravity
-//  - "portal-ship": (reserved, not used in v1)
-//  - "pad": yellow jump pad (extra-high jump)
-// "x" is in tiles (TILE = 40 px). Levels auto-loop their last 80 tiles for endless.
+// Level definitions for the runner — built procedurally with per-mode segments.
+//
+// Each gamemode has its own segment generators tailored to its strengths:
+//  - cube:   ground spikes + blocks at jumpable spacing
+//  - ship:   floor + ceiling obstacles forming corridors
+//  - ball:   alternating floor/ceiling spikes (gravity flip)
+//  - ufo:    stair-step blocks forcing repeated flaps
+//  - wave:   tight sawtooth corridors with diagonal gaps
+//  - robot:  wide pits requiring high held jumps
+//  - spider: alternating floor/ceiling spike fields
+//  - swing:  two-walled corridors needing mid-air flips
+//
+// "x" is in tiles (TILE = 40 px). Tile 0 is the start; player begins ~9 tiles in.
 
 export type ObstacleType =
   | "spike"
+  | "spike3"
+  | "spike-ceil"
+  | "spike3-ceil"
   | "block"
   | "tall"
-  | "spike3"
+  | "block-ceil"
+  | "tall-ceil"
   | "platform"
   | "portal-grav"
   | "pad"
+  | "coin"
   | "portal-cube"
   | "portal-ship"
   | "portal-ball"
@@ -33,7 +40,6 @@ export interface Obstacle {
   y?: number; // for platform: tiles above ground
 }
 
-// Decoration themes drawn in the background per level.
 export type DecorationTheme =
   | "mountains"
   | "city"
@@ -50,460 +56,475 @@ export interface LevelDef {
   id: string;
   name: string;
   difficulty: "Easy" | "Normal" | "Hard";
-  difficultyStars: 1 | 2 | 3; // intrinsic rating shown on the card
-  bg: string; // css gradient var
-  accent: string; // hex-ish or var
+  difficultyStars: 1 | 2 | 3;
+  bg: string;
+  accent: string;
   bpm: number;
-  length: number; // total tiles
+  length: number;
   obstacles: Obstacle[];
   decoration: DecorationTheme;
 }
 
-const easy: Obstacle[] = [
-  { x: 14, type: "spike" },
-  { x: 18, type: "spike" },
-  { x: 24, type: "spike" },
-  { x: 30, type: "spike3" },
-  { x: 42, type: "block" },
-  { x: 48, type: "spike" },
-  { x: 54, type: "spike" },
-  { x: 60, type: "block" },
-  { x: 61, type: "block" },
-  { x: 68, type: "spike" },
-  { x: 72, type: "spike" },
-  { x: 80, type: "spike3" },
-  { x: 92, type: "pad" },
-  { x: 98, type: "tall" },
-  { x: 106, type: "spike" },
-  { x: 112, type: "spike" },
-  { x: 118, type: "portal-ship" },
-  { x: 126, type: "block" },
-  { x: 130, type: "spike" },
-  { x: 136, type: "spike3" },
-  { x: 148, type: "spike" },
-  { x: 154, type: "spike" },
-  { x: 160, type: "portal-cube" },
-  { x: 168, type: "spike" },
-  { x: 174, type: "spike" },
-  { x: 180, type: "spike3" },
-  { x: 192, type: "block" },
-  { x: 198, type: "spike" },
-  { x: 204, type: "pad" },
-  { x: 210, type: "tall" },
-  { x: 218, type: "portal-ball" },
-  { x: 226, type: "spike" },
-  { x: 232, type: "spike3" },
-  { x: 246, type: "portal-cube" },
-  { x: 254, type: "block" },
-  { x: 258, type: "spike" },
-  { x: 264, type: "spike" },
-  { x: 272, type: "spike3" },
-  { x: 286, type: "spike" },
-  { x: 294, type: "tall" },
-  { x: 302, type: "spike" },
-  { x: 310, type: "spike3" },
-];
+// ============================================================================
+// Per-mode segment builders. Each appends obstacles starting at `cursor` and
+// returns the new cursor position.
+// ============================================================================
 
-const normal: Obstacle[] = [
-  { x: 12, type: "spike" },
-  { x: 18, type: "spike" },
-  { x: 24, type: "spike" },
-  { x: 30, type: "spike3" },
-  { x: 42, type: "block" },
-  { x: 43, type: "block" },
-  { x: 50, type: "spike" },
-  { x: 56, type: "tall" },
-  { x: 64, type: "spike" },
-  { x: 70, type: "portal-ufo" },
-  { x: 80, type: "spike" },
-  { x: 86, type: "spike" },
-  { x: 92, type: "spike" },
-  { x: 100, type: "portal-cube" },
-  { x: 108, type: "spike" },
-  { x: 114, type: "spike3" },
-  { x: 126, type: "block" },
-  { x: 127, type: "block" },
-  { x: 134, type: "spike" },
-  { x: 140, type: "pad" },
-  { x: 146, type: "portal-wave" },
-  { x: 156, type: "spike" },
-  { x: 162, type: "spike" },
-  { x: 170, type: "spike" },
-  { x: 178, type: "portal-cube" },
-  { x: 186, type: "pad" },
-  { x: 192, type: "tall" },
-  { x: 200, type: "spike3" },
-  { x: 214, type: "spike" },
-  { x: 220, type: "portal-ball" },
-  { x: 228, type: "block" },
-  { x: 232, type: "spike" },
-  { x: 238, type: "spike3" },
-  { x: 250, type: "spike" },
-  { x: 256, type: "tall" },
-  { x: 264, type: "portal-cube" },
-  { x: 272, type: "spike" },
-  { x: 278, type: "spike3" },
-  { x: 292, type: "block" },
-  { x: 298, type: "spike" },
-  { x: 304, type: "spike" },
-  { x: 312, type: "pad" },
-  { x: 320, type: "spike3" },
-  { x: 332, type: "tall" },
-  { x: 340, type: "spike" },
-];
+type ModeKey = "cube" | "ship" | "ball" | "ufo" | "wave" | "robot" | "spider" | "swing";
 
-const hard: Obstacle[] = [
-  { x: 10, type: "spike" },
-  { x: 14, type: "spike" },
-  { x: 18, type: "spike" },
-  { x: 22, type: "spike" },
-  { x: 30, type: "spike3" },
-  { x: 42, type: "tall" },
-  { x: 50, type: "portal-ship" },
-  { x: 58, type: "spike" },
-  { x: 64, type: "spike" },
-  { x: 70, type: "spike" },
-  { x: 78, type: "block" },
-  { x: 84, type: "spike" },
-  { x: 90, type: "portal-cube" },
-  { x: 96, type: "spike" },
-  { x: 100, type: "spike" },
-  { x: 106, type: "portal-spider" },
-  { x: 114, type: "spike" },
-  { x: 118, type: "spike" },
-  { x: 124, type: "portal-cube" },
-  { x: 130, type: "spike3" },
-  { x: 142, type: "portal-robot" },
-  { x: 150, type: "spike" },
-  { x: 156, type: "spike" },
-  { x: 162, type: "tall" },
-  { x: 168, type: "portal-cube" },
-  { x: 174, type: "spike" },
-  { x: 180, type: "spike" },
-  { x: 186, type: "spike" },
-  { x: 192, type: "portal-wave" },
-  { x: 200, type: "spike" },
-  { x: 206, type: "spike" },
-  { x: 214, type: "portal-cube" },
-  { x: 222, type: "spike3" },
-  { x: 234, type: "portal-swing" },
-  { x: 242, type: "spike" },
-  { x: 248, type: "spike" },
-  { x: 254, type: "spike" },
-  { x: 260, type: "portal-cube" },
-  { x: 266, type: "spike3" },
-  { x: 278, type: "spike" },
-  { x: 284, type: "spike" },
-  { x: 290, type: "tall" },
-  { x: 298, type: "portal-ball" },
-  { x: 306, type: "spike" },
-  { x: 312, type: "spike3" },
-  { x: 324, type: "portal-cube" },
-  { x: 332, type: "spike" },
-  { x: 338, type: "spike" },
-  { x: 346, type: "tall" },
-  { x: 354, type: "spike3" },
-];
+interface BuildCtx {
+  out: Obstacle[];
+  cursor: number;
+  rand: () => number;
+  difficulty: 1 | 2 | 3;
+}
 
-// Additional levels — densified
-const neonDrift: Obstacle[] = [
-  { x: 12, type: "spike" }, { x: 16, type: "spike" }, { x: 22, type: "spike" },
-  { x: 30, type: "spike3" }, { x: 42, type: "block" }, { x: 48, type: "spike" },
-  { x: 54, type: "spike" }, { x: 60, type: "portal-ship" }, { x: 70, type: "spike" },
-  { x: 76, type: "spike" }, { x: 82, type: "spike" }, { x: 90, type: "portal-cube" },
-  { x: 98, type: "spike3" }, { x: 112, type: "pad" }, { x: 120, type: "tall" },
-  { x: 128, type: "spike" }, { x: 134, type: "spike" }, { x: 142, type: "portal-ball" },
-  { x: 152, type: "spike" }, { x: 160, type: "block" }, { x: 168, type: "portal-cube" },
-  { x: 176, type: "spike" }, { x: 182, type: "spike3" }, { x: 196, type: "spike" },
-  { x: 204, type: "portal-wave" }, { x: 212, type: "spike" }, { x: 218, type: "spike" },
-  { x: 224, type: "spike" }, { x: 232, type: "portal-cube" }, { x: 240, type: "tall" },
-  { x: 248, type: "spike" }, { x: 254, type: "spike" }, { x: 262, type: "spike3" },
-  { x: 276, type: "spike" }, { x: 284, type: "pad" }, { x: 292, type: "tall" },
-  { x: 300, type: "spike" }, { x: 308, type: "spike3" }, { x: 322, type: "block" },
-  { x: 330, type: "spike" },
-];
+function pushCoinLine(ctx: BuildCtx, fromX: number, toX: number, yTile: number, step = 2) {
+  for (let x = fromX; x < toX; x += step) ctx.out.push({ x, type: "coin", y: yTile });
+}
 
-const plasmaTide: Obstacle[] = [
-  { x: 10, type: "spike" }, { x: 14, type: "spike" }, { x: 20, type: "spike" },
-  { x: 26, type: "spike" }, { x: 34, type: "portal-ufo" }, { x: 44, type: "spike" },
-  { x: 50, type: "spike" }, { x: 56, type: "spike3" }, { x: 70, type: "portal-cube" },
-  { x: 78, type: "tall" }, { x: 86, type: "spike" }, { x: 92, type: "spike" },
-  { x: 100, type: "portal-wave" }, { x: 108, type: "spike" }, { x: 114, type: "spike" },
-  { x: 120, type: "spike" }, { x: 128, type: "portal-cube" }, { x: 136, type: "spike3" },
-  { x: 150, type: "pad" }, { x: 158, type: "spike" }, { x: 164, type: "spike" },
-  { x: 172, type: "portal-ship" }, { x: 182, type: "spike" }, { x: 188, type: "spike" },
-  { x: 194, type: "spike" }, { x: 202, type: "portal-cube" }, { x: 212, type: "block" },
-  { x: 218, type: "spike" }, { x: 224, type: "spike3" }, { x: 238, type: "spike" },
-  { x: 244, type: "tall" }, { x: 252, type: "spike" }, { x: 258, type: "spike" },
-  { x: 266, type: "spike3" }, { x: 280, type: "portal-ball" }, { x: 288, type: "spike" },
-  { x: 294, type: "spike" }, { x: 302, type: "tall" }, { x: 310, type: "spike3" },
-  { x: 322, type: "spike" }, { x: 330, type: "pad" },
-];
+function buildCube(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  // Density: spacing between obstacles.
+  const minGap = ctx.difficulty === 1 ? 7 : ctx.difficulty === 2 ? 6 : 5;
+  let x = ctx.cursor + 4;
+  while (x < end - 4) {
+    const r = ctx.rand();
+    if (r < 0.5) {
+      ctx.out.push({ x, type: "spike" });
+      pushCoinLine(ctx, x - 2, x, 3);
+      x += minGap;
+    } else if (r < 0.75) {
+      ctx.out.push({ x, type: "spike3" });
+      x += minGap + 3;
+    } else if (r < 0.88) {
+      ctx.out.push({ x, type: "block" });
+      ctx.out.push({ x: x + 1, type: "block" });
+      ctx.out.push({ x: x + 4, type: "spike" });
+      x += minGap + 4;
+    } else if (r < 0.96) {
+      ctx.out.push({ x, type: "tall" });
+      ctx.out.push({ x: x + 5, type: "spike" });
+      x += minGap + 5;
+    } else {
+      ctx.out.push({ x, type: "pad" });
+      ctx.out.push({ x: x + 4, type: "tall" });
+      x += minGap + 6;
+    }
+  }
+  return end;
+}
 
-const glitchCity: Obstacle[] = [
-  { x: 12, type: "spike3" }, { x: 26, type: "tall" }, { x: 36, type: "portal-spider" },
-  { x: 44, type: "spike" }, { x: 50, type: "spike" }, { x: 56, type: "spike" },
-  { x: 64, type: "portal-cube" }, { x: 72, type: "spike3" }, { x: 86, type: "portal-robot" },
-  { x: 94, type: "spike" }, { x: 100, type: "spike" }, { x: 106, type: "tall" },
-  { x: 114, type: "portal-cube" }, { x: 122, type: "spike" }, { x: 128, type: "spike" },
-  { x: 134, type: "spike3" }, { x: 148, type: "portal-ball" }, { x: 156, type: "spike" },
-  { x: 162, type: "spike" }, { x: 168, type: "block" }, { x: 174, type: "portal-cube" },
-  { x: 182, type: "spike" }, { x: 188, type: "spike" }, { x: 194, type: "spike" },
-  { x: 200, type: "portal-swing" }, { x: 210, type: "spike3" }, { x: 224, type: "portal-cube" },
-  { x: 232, type: "pad" }, { x: 240, type: "tall" }, { x: 248, type: "spike" },
-  { x: 254, type: "spike3" }, { x: 268, type: "spike" }, { x: 274, type: "portal-spider" },
-  { x: 282, type: "spike" }, { x: 288, type: "spike" }, { x: 296, type: "tall" },
-  { x: 304, type: "portal-cube" }, { x: 312, type: "spike3" }, { x: 326, type: "spike" },
-];
+function buildShip(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  // Ship corridors: opposing floor + ceiling obstacles forming gaps.
+  const gapTiles = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 3;
+  let x = ctx.cursor + 4;
+  while (x < end - 4) {
+    const r = ctx.rand();
+    if (r < 0.55) {
+      // tall floor block + hanging ceiling block forming a gap
+      ctx.out.push({ x, type: "tall" });
+      ctx.out.push({ x: x + 3, type: "tall-ceil" });
+      pushCoinLine(ctx, x - 1, x + 5, 3);
+      x += gapTiles + 6;
+    } else if (r < 0.8) {
+      // floor spikes you must rise over, then ceiling spikes you must dip under
+      ctx.out.push({ x, type: "spike3" });
+      ctx.out.push({ x: x + 5, type: "spike3-ceil" });
+      x += gapTiles + 7;
+    } else {
+      // pinch: tall on both sides
+      ctx.out.push({ x, type: "block" });
+      ctx.out.push({ x: x + 1, type: "block-ceil" });
+      ctx.out.push({ x: x + 4, type: "tall-ceil" });
+      ctx.out.push({ x: x + 6, type: "tall" });
+      x += gapTiles + 8;
+    }
+  }
+  return end;
+}
 
-const laserDawn: Obstacle[] = [
-  { x: 14, type: "spike" }, { x: 20, type: "spike" }, { x: 26, type: "spike" },
-  { x: 34, type: "block" }, { x: 40, type: "spike" }, { x: 46, type: "spike" },
-  { x: 52, type: "portal-ship" }, { x: 60, type: "spike" }, { x: 66, type: "spike" },
-  { x: 72, type: "spike3" }, { x: 86, type: "portal-cube" }, { x: 94, type: "pad" },
-  { x: 102, type: "tall" }, { x: 110, type: "spike" }, { x: 116, type: "spike" },
-  { x: 124, type: "portal-wave" }, { x: 132, type: "spike" }, { x: 138, type: "spike" },
-  { x: 144, type: "spike" }, { x: 152, type: "portal-cube" }, { x: 160, type: "spike3" },
-  { x: 174, type: "spike" }, { x: 180, type: "spike" }, { x: 188, type: "portal-ball" },
-  { x: 196, type: "spike" }, { x: 204, type: "block" }, { x: 212, type: "portal-cube" },
-  { x: 220, type: "spike" }, { x: 226, type: "spike" }, { x: 232, type: "spike3" },
-  { x: 246, type: "tall" }, { x: 254, type: "spike" }, { x: 260, type: "spike" },
-  { x: 268, type: "pad" }, { x: 276, type: "spike3" }, { x: 290, type: "portal-cube" },
-  { x: 298, type: "spike" }, { x: 304, type: "tall" },
-];
+function buildBall(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  const minGap = ctx.difficulty === 1 ? 8 : ctx.difficulty === 2 ? 7 : 6;
+  let x = ctx.cursor + 4;
+  let onCeiling = false;
+  while (x < end - 4) {
+    if (onCeiling) {
+      ctx.out.push({ x, type: "spike-ceil" });
+      ctx.out.push({ x: x + 2, type: "spike-ceil" });
+    } else {
+      ctx.out.push({ x, type: "spike" });
+      ctx.out.push({ x: x + 2, type: "spike" });
+    }
+    pushCoinLine(ctx, x - 1, x + 3, onCeiling ? 5 : 1);
+    x += minGap;
+    if (ctx.rand() < 0.5) onCeiling = !onCeiling;
+  }
+  return end;
+}
 
-const vortexRun: Obstacle[] = [
-  { x: 10, type: "spike" }, { x: 16, type: "spike3" }, { x: 30, type: "portal-ufo" },
-  { x: 40, type: "spike" }, { x: 46, type: "spike" }, { x: 52, type: "tall" },
-  { x: 60, type: "portal-cube" }, { x: 68, type: "spike" }, { x: 74, type: "spike" },
-  { x: 80, type: "spike3" }, { x: 94, type: "portal-ball" }, { x: 102, type: "spike" },
-  { x: 108, type: "spike" }, { x: 114, type: "spike" }, { x: 122, type: "portal-cube" },
-  { x: 130, type: "pad" }, { x: 138, type: "tall" }, { x: 146, type: "portal-wave" },
-  { x: 154, type: "spike" }, { x: 160, type: "spike" }, { x: 168, type: "spike" },
-  { x: 176, type: "spike3" }, { x: 190, type: "portal-cube" }, { x: 198, type: "block" },
-  { x: 204, type: "spike" }, { x: 210, type: "spike" }, { x: 218, type: "portal-spider" },
-  { x: 226, type: "spike" }, { x: 232, type: "spike" }, { x: 238, type: "spike3" },
-  { x: 252, type: "spike" }, { x: 258, type: "tall" }, { x: 266, type: "portal-cube" },
-  { x: 274, type: "spike" }, { x: 280, type: "spike3" }, { x: 294, type: "spike" },
-  { x: 302, type: "pad" }, { x: 310, type: "tall" }, { x: 318, type: "portal-cube" },
-];
+function buildUfo(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  let x = ctx.cursor + 4;
+  while (x < end - 4) {
+    const r = ctx.rand();
+    if (r < 0.6) {
+      // stairs of tall blocks requiring repeated flaps
+      ctx.out.push({ x, type: "tall" });
+      ctx.out.push({ x: x + 3, type: "tall-ceil" });
+      pushCoinLine(ctx, x - 1, x + 4, 3);
+      x += 7;
+    } else if (r < 0.85) {
+      // ceiling overhang
+      ctx.out.push({ x, type: "block-ceil" });
+      ctx.out.push({ x: x + 4, type: "spike" });
+      x += 8;
+    } else {
+      ctx.out.push({ x, type: "spike3-ceil" });
+      x += 8;
+    }
+  }
+  return end;
+}
 
-const hyperLoop: Obstacle[] = [
-  { x: 10, type: "spike" }, { x: 14, type: "spike" }, { x: 18, type: "spike" },
-  { x: 24, type: "spike" }, { x: 30, type: "spike3" }, { x: 44, type: "portal-ship" },
-  { x: 52, type: "spike" }, { x: 58, type: "spike" }, { x: 64, type: "spike" },
-  { x: 72, type: "portal-cube" }, { x: 80, type: "tall" }, { x: 88, type: "spike3" },
-  { x: 102, type: "portal-ball" }, { x: 110, type: "spike" }, { x: 116, type: "spike" },
-  { x: 122, type: "spike" }, { x: 130, type: "portal-cube" }, { x: 138, type: "pad" },
-  { x: 146, type: "spike" }, { x: 152, type: "portal-ufo" }, { x: 162, type: "spike" },
-  { x: 168, type: "spike" }, { x: 174, type: "spike3" }, { x: 188, type: "portal-cube" },
-  { x: 196, type: "spike" }, { x: 202, type: "block" }, { x: 210, type: "portal-wave" },
-  { x: 218, type: "spike" }, { x: 224, type: "spike" }, { x: 230, type: "spike" },
-  { x: 238, type: "spike3" }, { x: 252, type: "tall" }, { x: 260, type: "spike" },
-  { x: 266, type: "spike" }, { x: 272, type: "portal-cube" }, { x: 280, type: "spike3" },
-  { x: 294, type: "portal-spider" }, { x: 302, type: "spike" }, { x: 308, type: "spike" },
-  { x: 316, type: "tall" }, { x: 324, type: "portal-cube" }, { x: 332, type: "spike3" },
-];
+function buildWave(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  // Tight sawtooth — alternate floor/ceiling tall blocks with small gaps
+  const gap = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 3;
+  let x = ctx.cursor + 4;
+  let top = false;
+  while (x < end - 4) {
+    if (top) {
+      ctx.out.push({ x, type: "tall-ceil" });
+      ctx.out.push({ x: x + 1, type: "tall-ceil" });
+    } else {
+      ctx.out.push({ x, type: "tall" });
+      ctx.out.push({ x: x + 1, type: "tall" });
+    }
+    x += gap + 2;
+    top = !top;
+  }
+  return end;
+}
 
-const finalBoss: Obstacle[] = [
-  { x: 8, type: "spike" }, { x: 12, type: "spike" }, { x: 16, type: "spike" },
-  { x: 20, type: "spike" }, { x: 26, type: "spike3" }, { x: 38, type: "portal-ship" },
-  { x: 46, type: "spike" }, { x: 52, type: "spike" }, { x: 58, type: "spike" },
-  { x: 66, type: "portal-spider" }, { x: 74, type: "spike" }, { x: 80, type: "spike" },
-  { x: 86, type: "tall" }, { x: 94, type: "portal-cube" }, { x: 102, type: "spike" },
-  { x: 108, type: "spike" }, { x: 114, type: "spike3" }, { x: 128, type: "portal-robot" },
-  { x: 136, type: "spike" }, { x: 142, type: "spike" }, { x: 148, type: "tall" },
-  { x: 156, type: "portal-cube" }, { x: 164, type: "spike" }, { x: 170, type: "spike" },
-  { x: 176, type: "portal-wave" }, { x: 184, type: "spike" }, { x: 190, type: "spike" },
-  { x: 196, type: "spike" }, { x: 204, type: "portal-cube" }, { x: 212, type: "spike3" },
-  { x: 226, type: "portal-swing" }, { x: 234, type: "spike" }, { x: 240, type: "spike" },
-  { x: 246, type: "spike" }, { x: 254, type: "portal-cube" }, { x: 262, type: "spike3" },
-  { x: 276, type: "portal-ball" }, { x: 284, type: "spike" }, { x: 290, type: "spike" },
-  { x: 296, type: "spike" }, { x: 304, type: "portal-cube" }, { x: 312, type: "spike3" },
-  { x: 326, type: "tall" }, { x: 334, type: "spike" }, { x: 340, type: "spike" },
-  { x: 346, type: "spike" }, { x: 354, type: "portal-ufo" }, { x: 362, type: "spike3" },
-  { x: 376, type: "spike" }, { x: 384, type: "tall" }, { x: 392, type: "portal-cube" },
-  { x: 400, type: "spike3" }, { x: 414, type: "spike" }, { x: 422, type: "spike" },
-];
+function buildRobot(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  let x = ctx.cursor + 4;
+  while (x < end - 4) {
+    const r = ctx.rand();
+    if (r < 0.55) {
+      // wide spike pit — needs held jump
+      ctx.out.push({ x, type: "spike3" });
+      ctx.out.push({ x: x + 3, type: "spike3" });
+      pushCoinLine(ctx, x, x + 6, 4);
+      x += 10;
+    } else if (r < 0.85) {
+      // tall + landing block + spike — held jump up to platform
+      ctx.out.push({ x, type: "spike" });
+      ctx.out.push({ x: x + 4, type: "tall" });
+      ctx.out.push({ x: x + 8, type: "spike3" });
+      x += 12;
+    } else {
+      ctx.out.push({ x, type: "pad" });
+      ctx.out.push({ x: x + 5, type: "tall" });
+      ctx.out.push({ x: x + 8, type: "spike" });
+      x += 11;
+    }
+  }
+  return end;
+}
 
-export const LEVELS: LevelDef[] = [
-  {
-    id: "stereo-pulse",
-    name: "Stereo Pulse",
-    difficulty: "Easy",
-    difficultyStars: 1,
-    bg: "var(--gradient-bg-1)",
-    accent: "var(--neon-pink)",
-    bpm: 140,
-    length: 330,
-    obstacles: easy,
-    decoration: "mountains",
-  },
-  {
-    id: "cyber-rush",
-    name: "Cyber Rush",
-    difficulty: "Normal",
-    difficultyStars: 2,
-    bg: "var(--gradient-bg-2)",
-    accent: "var(--neon-cyan)",
-    bpm: 155,
-    length: 360,
-    obstacles: normal,
-    decoration: "city",
-  },
-  {
-    id: "voltage-storm",
-    name: "Voltage Storm",
-    difficulty: "Hard",
-    difficultyStars: 3,
-    bg: "var(--gradient-bg-3)",
-    accent: "var(--neon-green)",
-    bpm: 170,
-    length: 380,
-    obstacles: hard,
-    decoration: "circuit",
-  },
-  {
-    id: "neon-drift",
-    name: "Neon Drift",
-    difficulty: "Easy",
-    difficultyStars: 1,
-    bg: "var(--gradient-bg-2)",
-    accent: "var(--neon-cyan)",
-    bpm: 138,
-    length: 350,
-    obstacles: neonDrift,
-    decoration: "stars",
-  },
-  {
-    id: "plasma-tide",
-    name: "Plasma Tide",
-    difficulty: "Normal",
-    difficultyStars: 2,
-    bg: "var(--gradient-bg-1)",
-    accent: "var(--neon-pink)",
-    bpm: 150,
-    length: 350,
-    obstacles: plasmaTide,
-    decoration: "waves",
-  },
-  {
-    id: "glitch-city",
-    name: "Glitch City",
-    difficulty: "Hard",
-    difficultyStars: 3,
-    bg: "var(--gradient-bg-3)",
-    accent: "var(--neon-green)",
-    bpm: 165,
-    length: 350,
-    obstacles: glitchCity,
-    decoration: "city",
-  },
-  {
-    id: "laser-dawn",
-    name: "Laser Dawn",
-    difficulty: "Normal",
-    difficultyStars: 2,
-    bg: "var(--gradient-bg-endless)",
-    accent: "var(--neon-pink)",
-    bpm: 148,
-    length: 330,
-    obstacles: laserDawn,
-    decoration: "pyramids",
-  },
-  {
-    id: "vortex-run",
-    name: "Vortex Run",
-    difficulty: "Hard",
-    difficultyStars: 3,
-    bg: "var(--gradient-bg-2)",
-    accent: "var(--neon-cyan)",
-    bpm: 162,
-    length: 350,
-    obstacles: vortexRun,
-    decoration: "crystals",
-  },
-  {
-    id: "hyper-loop",
-    name: "Hyper Loop",
-    difficulty: "Hard",
-    difficultyStars: 3,
-    bg: "var(--gradient-bg-1)",
-    accent: "var(--neon-pink)",
-    bpm: 172,
-    length: 360,
-    obstacles: hyperLoop,
-    decoration: "rain",
-  },
-  {
-    id: "final-boss",
-    name: "Final Boss",
-    difficulty: "Hard",
-    difficultyStars: 3,
-    bg: "var(--gradient-bg-3)",
-    accent: "var(--neon-green)",
-    bpm: 180,
-    length: 450,
-    obstacles: finalBoss,
-    decoration: "skull",
-  },
-];
+function buildSpider(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  const minGap = ctx.difficulty === 1 ? 6 : ctx.difficulty === 2 ? 5 : 4;
+  let x = ctx.cursor + 4;
+  let top = false;
+  while (x < end - 4) {
+    if (top) {
+      ctx.out.push({ x, type: "spike3-ceil" });
+    } else {
+      ctx.out.push({ x, type: "spike3" });
+    }
+    x += minGap + 2;
+    top = !top;
+  }
+  return end;
+}
 
-export const ENDLESS_BG = "var(--gradient-bg-endless)";
-export const ENDLESS_ACCENT = "var(--neon-pink)";
-export const ENDLESS_DECORATION: DecorationTheme = "stars";
+function buildSwing(ctx: BuildCtx, lengthTiles: number): number {
+  const end = ctx.cursor + lengthTiles;
+  let x = ctx.cursor + 4;
+  while (x < end - 4) {
+    const r = ctx.rand();
+    if (r < 0.6) {
+      // two walls forming a flip-required corridor
+      ctx.out.push({ x, type: "tall" });
+      ctx.out.push({ x: x + 4, type: "tall-ceil" });
+      pushCoinLine(ctx, x - 1, x + 5, 3);
+      x += 8;
+    } else {
+      ctx.out.push({ x, type: "spike3-ceil" });
+      ctx.out.push({ x: x + 4, type: "spike3" });
+      x += 9;
+    }
+  }
+  return end;
+}
 
-// Procedural endless chunks. Each chunk is a list of obstacles relative to chunk start.
-const CHUNK_LEN = 24;
-const chunks: Obstacle[][] = [
-  [{ x: 6, type: "spike" }, { x: 14, type: "spike" }],
-  [{ x: 4, type: "spike" }, { x: 10, type: "spike3" }, { x: 20, type: "spike" }],
-  [{ x: 6, type: "block" }, { x: 7, type: "block" }, { x: 16, type: "spike" }],
-  [{ x: 4, type: "tall" }, { x: 14, type: "spike" }, { x: 20, type: "spike" }],
-  [{ x: 6, type: "pad" }, { x: 14, type: "tall" }],
-  [{ x: 4, type: "spike3" }, { x: 16, type: "spike3" }],
-  [{ x: 6, type: "platform", y: 4 }, { x: 14, type: "spike" }],
-  [{ x: 4, type: "spike" }, { x: 10, type: "block" }, { x: 18, type: "spike3" }],
-];
+const BUILDERS: Record<ModeKey, (ctx: BuildCtx, len: number) => number> = {
+  cube: buildCube,
+  ship: buildShip,
+  ball: buildBall,
+  ufo: buildUfo,
+  wave: buildWave,
+  robot: buildRobot,
+  spider: buildSpider,
+  swing: buildSwing,
+};
 
-export type EndlessMode =
-  | "cube"
-  | "ship"
-  | "ball"
-  | "ufo"
-  | "wave"
-  | "robot"
-  | "spider"
-  | "swing"
-  | "mixed";
+function modeToPortalType(m: ModeKey): ObstacleType {
+  return ("portal-" + m) as ObstacleType;
+}
 
-export function generateEndlessObstacles(seed: number, chunkCount: number, startMode: EndlessMode = "mixed"): Obstacle[] {
-  // Deterministic LCG so increasing seed gives a stable run.
+// Build a full level by chaining mode segments.
+// `segments` is a list of [mode, lengthTiles]. A 4-tile portal lead-in is added
+// between segments. The first segment is always the player's starting mode (cube)
+// so they get a safe runway.
+function buildLevel(
+  seed: number,
+  difficulty: 1 | 2 | 3,
+  intro: number,
+  segments: [ModeKey, number][],
+): { obstacles: Obstacle[]; length: number } {
   let s = seed * 9301 + 49297;
   const rand = () => {
     s = (s * 9301 + 49297) % 233280;
     return s / 233280;
   };
   const out: Obstacle[] = [];
-  let cursor = 12; // initial empty runway
-  for (let i = 0; i < chunkCount; i++) {
-    const idx = Math.floor(rand() * chunks.length);
-    const difficultyBoost = Math.min(0.6, i * 0.02);
-    // occasionally double up at higher difficulty
-    const chunk = chunks[idx];
-    for (const o of chunk) {
-      // In single-mode runs, strip random portals from chunks so the player stays in their chosen mode.
-      if (startMode !== "mixed" && o.type.startsWith("portal-")) continue;
-      out.push({ ...o, x: o.x + cursor });
+  // Generous starting runway — player spawns ~9 tiles in, no obstacles in first `intro`.
+  const ctx: BuildCtx = { out, cursor: intro, rand, difficulty };
+
+  for (let i = 0; i < segments.length; i++) {
+    const [mode, len] = segments[i];
+    if (i > 0) {
+      // Insert portal 2 tiles before segment start
+      ctx.out.push({ x: ctx.cursor - 1, type: modeToPortalType(mode) });
     }
-    if (rand() < difficultyBoost) {
-      const extra = chunks[Math.floor(rand() * chunks.length)];
-      for (const o of extra) {
-        if (startMode !== "mixed" && o.type.startsWith("portal-")) continue;
-        out.push({ ...o, x: o.x + cursor + 2 });
-      }
-    }
-    cursor += CHUNK_LEN;
+    ctx.cursor = BUILDERS[mode](ctx, len);
+    // Small breather between segments
+    ctx.cursor += 2;
   }
+  // Sort by x for safety
+  out.sort((a, b) => a.x - b.x);
+  return { obstacles: out, length: ctx.cursor + 6 };
+}
+
+// ============================================================================
+// Hand-curated level lineup — each highlights different modes.
+// ============================================================================
+
+function makeLevel(
+  base: Omit<LevelDef, "obstacles" | "length"> & { length?: number },
+  seed: number,
+  segments: [ModeKey, number][],
+): LevelDef {
+  const built = buildLevel(seed, base.difficultyStars, 14, segments);
+  return { ...base, obstacles: built.obstacles, length: built.length };
+}
+
+export const LEVELS: LevelDef[] = [
+  makeLevel(
+    {
+      id: "stereo-pulse",
+      name: "Stereo Pulse",
+      difficulty: "Easy",
+      difficultyStars: 1,
+      bg: "var(--gradient-bg-1)",
+      accent: "var(--neon-pink)",
+      bpm: 140,
+      decoration: "mountains",
+    },
+    101,
+    [["cube", 70], ["ship", 60], ["cube", 60], ["ball", 60]],
+  ),
+  makeLevel(
+    {
+      id: "cyber-rush",
+      name: "Cyber Rush",
+      difficulty: "Normal",
+      difficultyStars: 2,
+      bg: "var(--gradient-bg-2)",
+      accent: "var(--neon-cyan)",
+      bpm: 155,
+      decoration: "city",
+    },
+    202,
+    [["cube", 60], ["ufo", 60], ["cube", 50], ["ship", 70], ["wave", 50]],
+  ),
+  makeLevel(
+    {
+      id: "voltage-storm",
+      name: "Voltage Storm",
+      difficulty: "Hard",
+      difficultyStars: 3,
+      bg: "var(--gradient-bg-3)",
+      accent: "var(--neon-green)",
+      bpm: 170,
+      decoration: "circuit",
+    },
+    303,
+    [["cube", 50], ["ship", 60], ["spider", 60], ["robot", 60], ["wave", 50], ["cube", 50]],
+  ),
+  makeLevel(
+    {
+      id: "neon-drift",
+      name: "Neon Drift",
+      difficulty: "Easy",
+      difficultyStars: 1,
+      bg: "var(--gradient-bg-2)",
+      accent: "var(--neon-cyan)",
+      bpm: 138,
+      decoration: "stars",
+    },
+    404,
+    [["cube", 70], ["ufo", 60], ["cube", 60], ["ship", 60]],
+  ),
+  makeLevel(
+    {
+      id: "plasma-tide",
+      name: "Plasma Tide",
+      difficulty: "Normal",
+      difficultyStars: 2,
+      bg: "var(--gradient-bg-1)",
+      accent: "var(--neon-pink)",
+      bpm: 150,
+      decoration: "waves",
+    },
+    505,
+    [["cube", 60], ["wave", 50], ["cube", 50], ["ball", 60], ["ship", 60]],
+  ),
+  makeLevel(
+    {
+      id: "glitch-city",
+      name: "Glitch City",
+      difficulty: "Hard",
+      difficultyStars: 3,
+      bg: "var(--gradient-bg-3)",
+      accent: "var(--neon-green)",
+      bpm: 165,
+      decoration: "city",
+    },
+    606,
+    [["cube", 50], ["spider", 60], ["robot", 60], ["ufo", 60], ["swing", 60], ["cube", 40]],
+  ),
+  makeLevel(
+    {
+      id: "laser-dawn",
+      name: "Laser Dawn",
+      difficulty: "Normal",
+      difficultyStars: 2,
+      bg: "var(--gradient-bg-endless)",
+      accent: "var(--neon-pink)",
+      bpm: 148,
+      decoration: "pyramids",
+    },
+    707,
+    [["cube", 60], ["ship", 70], ["cube", 50], ["robot", 60]],
+  ),
+  makeLevel(
+    {
+      id: "vortex-run",
+      name: "Vortex Run",
+      difficulty: "Hard",
+      difficultyStars: 3,
+      bg: "var(--gradient-bg-2)",
+      accent: "var(--neon-cyan)",
+      bpm: 162,
+      decoration: "crystals",
+    },
+    808,
+    [["cube", 50], ["ball", 60], ["ufo", 60], ["wave", 60], ["spider", 50], ["cube", 40]],
+  ),
+  makeLevel(
+    {
+      id: "hyper-loop",
+      name: "Hyper Loop",
+      difficulty: "Hard",
+      difficultyStars: 3,
+      bg: "var(--gradient-bg-1)",
+      accent: "var(--neon-pink)",
+      bpm: 172,
+      decoration: "rain",
+    },
+    909,
+    [["cube", 50], ["ship", 60], ["wave", 60], ["ufo", 50], ["swing", 60], ["robot", 60]],
+  ),
+  makeLevel(
+    {
+      id: "final-boss",
+      name: "Final Boss",
+      difficulty: "Hard",
+      difficultyStars: 3,
+      bg: "var(--gradient-bg-3)",
+      accent: "var(--neon-green)",
+      bpm: 180,
+      decoration: "skull",
+    },
+    1010,
+    [
+      ["cube", 50], ["ship", 50], ["spider", 50], ["robot", 50],
+      ["ufo", 50], ["wave", 50], ["ball", 50], ["swing", 50], ["cube", 60],
+    ],
+  ),
+];
+
+export const ENDLESS_BG = "var(--gradient-bg-endless)";
+export const ENDLESS_ACCENT = "var(--neon-pink)";
+export const ENDLESS_DECORATION: DecorationTheme = "stars";
+
+// ============================================================================
+// Endless: pick a builder per chunk. Single-mode runs lock to that builder.
+// ============================================================================
+
+export type EndlessMode = ModeKey | "mixed";
+
+const CHUNK_LEN = 30;
+
+export function generateEndlessObstacles(
+  seed: number,
+  chunkCount: number,
+  startMode: EndlessMode = "mixed",
+): Obstacle[] {
+  let s = seed * 9301 + 49297;
+  const rand = () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+  const out: Obstacle[] = [];
+  const ctx: BuildCtx = { out, cursor: 14, rand, difficulty: 2 };
+  const allModes: ModeKey[] = ["cube", "ship", "ball", "ufo", "wave", "robot", "spider", "swing"];
+
+  let lastMode: ModeKey = startMode === "mixed" ? "cube" : startMode;
+  for (let i = 0; i < chunkCount; i++) {
+    let mode: ModeKey;
+    if (startMode === "mixed") {
+      // Insert a portal before each chunk (except the first which inherits cube start).
+      mode = i === 0 ? "cube" : allModes[Math.floor(rand() * allModes.length)];
+      if (i > 0 && mode !== lastMode) {
+        ctx.out.push({ x: ctx.cursor - 1, type: modeToPortalType(mode) });
+      }
+    } else {
+      mode = startMode;
+    }
+    // Ramp difficulty slowly
+    ctx.difficulty = (Math.min(3, 1 + Math.floor(i / 4)) as 1 | 2 | 3);
+    ctx.cursor = BUILDERS[mode](ctx, CHUNK_LEN);
+    ctx.cursor += 2;
+    lastMode = mode;
+  }
+  out.sort((a, b) => a.x - b.x);
   return out;
 }
