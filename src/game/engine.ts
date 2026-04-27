@@ -288,6 +288,24 @@ function obstacleRects(state: GameState): ObstacleRect[] {
         }
         break;
       }
+      case "spike-ceil": {
+        rects.push({
+          left: ox + 6, right: ox + TILE - 6,
+          top: 0, bottom: TILE - 8,
+          lethal: true, landable: false, obstacle: o,
+        });
+        break;
+      }
+      case "spike3-ceil": {
+        for (let i = 0; i < 3; i++) {
+          rects.push({
+            left: ox + i * TILE + 6, right: ox + i * TILE + TILE - 6,
+            top: 0, bottom: TILE - 8,
+            lethal: true, landable: false, obstacle: o,
+          });
+        }
+        break;
+      }
       case "block": {
         rects.push({
           left: ox, right: ox + TILE,
@@ -302,6 +320,26 @@ function obstacleRects(state: GameState): ObstacleRect[] {
           top: groundTop - TILE * 2, bottom: groundTop,
           lethal: false, landable: true, obstacle: o,
         });
+        break;
+      }
+      case "block-ceil": {
+        rects.push({
+          left: ox, right: ox + TILE,
+          top: 0, bottom: TILE,
+          lethal: false, landable: true, obstacle: o,
+        });
+        break;
+      }
+      case "tall-ceil": {
+        rects.push({
+          left: ox, right: ox + TILE,
+          top: 0, bottom: TILE * 2,
+          lethal: false, landable: true, obstacle: o,
+        });
+        break;
+      }
+      case "coin": {
+        // Decorative collectible — no collision rect (handled separately if needed).
         break;
       }
       case "platform": {
