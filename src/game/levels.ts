@@ -21,6 +21,10 @@ export type ObstacleType =
   | "tall"
   | "block-ceil"
   | "tall-ceil"
+  | "slope-up"        // floor slope rising left→right (1 tile wide, 1 tile tall)
+  | "slope-down"      // floor slope falling left→right
+  | "slope-up-ceil"   // ceiling slope descending left→right (hangs from ceiling)
+  | "slope-down-ceil" // ceiling slope ascending left→right
   | "platform"
   | "portal-grav"
   | "pad"
