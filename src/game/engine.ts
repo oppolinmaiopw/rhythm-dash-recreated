@@ -777,9 +777,31 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
     ctx.shadowBlur = 0;
   }
 
-  // Obstacles
+  // Obstacles. For slopes, the obstacleRects function emits multiple sub-rects
+  // (for staircase collision); we draw each slope only once using its full bbox.
   const rects = obstacleRects(state);
+  const groundTopForDraw = state.height - groundPx(state.height);
+  const drawnSlopes = new Set<Obstacle>();
   for (const r of rects) {
+    const t = r.obstacle.type;
+    if (t === "slope-up" || t === "slope-down" || t === "slope-up-ceil" || t === "slope-down-ceil") {
+      if (drawnSlopes.has(r.obstacle)) continue;
+      drawnSlopes.add(r.obstacle);
+      const ox = r.obstacle.x * TILE - state.scrollX;
+      const base = r.obstacle.y ?? 0;
+      if (t === "slope-up") {
+        const top = groundTopForDraw - (base + 1) * TILE;
+        drawObstacle(ctx, t, ox, top, TILE, (base + 1) * TILE, accent);
+      } else if (t === "slope-down") {
+        const top = groundTopForDraw - base * TILE;
+        drawObstacle(ctx, t, ox, top, TILE, base * TILE, accent);
+      } else if (t === "slope-up-ceil") {
+        drawObstacle(ctx, t, ox, 0, TILE, base * TILE, accent);
+      } else {
+        drawObstacle(ctx, t, ox, 0, TILE, (base + 1) * TILE, accent);
+      }
+      continue;
+    }
     const sx = r.left - state.scrollX;
     const sw = r.right - r.left;
     const sh = r.bottom - r.top;
