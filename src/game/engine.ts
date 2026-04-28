@@ -338,6 +338,57 @@ function obstacleRects(state: GameState): ObstacleRect[] {
         });
         break;
       }
+      case "slope-up":
+      case "slope-down": {
+        // Triangular floor ramp 1 tile wide.
+        // slope-up: top edge rises from y=baseTiles at left to baseTiles+1 at right.
+        // slope-down: top edge falls from y=baseTiles at left to baseTiles-1 at right.
+        const baseTiles = o.y ?? 0;
+        const STEPS = 6;
+        for (let i = 0; i < STEPS; i++) {
+          const t0 = i / STEPS;
+          const t1 = (i + 1) / STEPS;
+          const tMax = Math.max(t0, t1);
+          // Use the higher (more conservative) end so the player can't clip into the slope.
+          const heightTiles = o.type === "slope-up"
+            ? baseTiles + tMax
+            : baseTiles - Math.min(t0, t1);
+          rects.push({
+            left: ox + i * (TILE / STEPS),
+            right: ox + (i + 1) * (TILE / STEPS),
+            top: groundTop - heightTiles * TILE,
+            bottom: groundTop,
+            lethal: false, landable: true, obstacle: o,
+          });
+        }
+        break;
+      }
+      case "slope-up-ceil":
+      case "slope-down-ceil": {
+        // Ceiling ramp: hangs from top of playfield.
+        // slope-up-ceil: bottom edge descends from y=baseTiles at left to baseTiles-1 at right
+        //   (i.e. ceiling block height shrinks left→right) — actually we want it to fall away
+        //   to mirror floor going up. We'll use baseTiles falling to baseTiles-1.
+        // slope-down-ceil: bottom edge rises from baseTiles at left to baseTiles+1 at right.
+        const baseTiles = o.y ?? 0;
+        const STEPS = 6;
+        for (let i = 0; i < STEPS; i++) {
+          const t0 = i / STEPS;
+          const t1 = (i + 1) / STEPS;
+          const tMax = Math.max(t0, t1);
+          const heightTiles = o.type === "slope-up-ceil"
+            ? baseTiles - Math.min(t0, t1)
+            : baseTiles + tMax;
+          rects.push({
+            left: ox + i * (TILE / STEPS),
+            right: ox + (i + 1) * (TILE / STEPS),
+            top: 0,
+            bottom: heightTiles * TILE,
+            lethal: false, landable: true, obstacle: o,
+          });
+        }
+        break;
+      }
       case "coin": {
         // Visual only — provide a small rect for rendering, no collision side effects.
         const yTiles = o.y ?? 3;
@@ -726,9 +777,31 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
     ctx.shadowBlur = 0;
   }
 
-  // Obstacles
+  // Obstacles. For slopes, the obstacleRects function emits multiple sub-rects
+  // (for staircase collision); we draw each slope only once using its full bbox.
   const rects = obstacleRects(state);
+  const groundTopForDraw = state.height - groundPx(state.height);
+  const drawnSlopes = new Set<Obstacle>();
   for (const r of rects) {
+    const t = r.obstacle.type;
+    if (t === "slope-up" || t === "slope-down" || t === "slope-up-ceil" || t === "slope-down-ceil") {
+      if (drawnSlopes.has(r.obstacle)) continue;
+      drawnSlopes.add(r.obstacle);
+      const ox = r.obstacle.x * TILE - state.scrollX;
+      const base = r.obstacle.y ?? 0;
+      if (t === "slope-up") {
+        const top = groundTopForDraw - (base + 1) * TILE;
+        drawObstacle(ctx, t, ox, top, TILE, (base + 1) * TILE, accent);
+      } else if (t === "slope-down") {
+        const top = groundTopForDraw - base * TILE;
+        drawObstacle(ctx, t, ox, top, TILE, base * TILE, accent);
+      } else if (t === "slope-up-ceil") {
+        drawObstacle(ctx, t, ox, 0, TILE, base * TILE, accent);
+      } else {
+        drawObstacle(ctx, t, ox, 0, TILE, (base + 1) * TILE, accent);
+      }
+      continue;
+    }
     const sx = r.left - state.scrollX;
     const sw = r.right - r.left;
     const sh = r.bottom - r.top;
@@ -1127,6 +1200,48 @@ function drawObstacle(
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("$", cx, cy + 1);
+      break;
+    }
+    case "slope-up":
+    case "slope-down":
+    case "slope-up-ceil":
+    case "slope-down-ceil": {
+      // The collision rect spans the full triangle bounding box.
+      // We render a filled triangle inside (x,y,w,h).
+      // Determine triangle orientation by type.
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      if (type === "slope-up") {
+        // floor going up: bottom-left, bottom-right, top-right
+        ctx.moveTo(x, y + h);
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x + w, y);
+      } else if (type === "slope-down") {
+        // floor going down: top-left, bottom-left, bottom-right
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + h);
+        ctx.lineTo(x + w, y + h);
+      } else if (type === "slope-up-ceil") {
+        // ceiling slope falling away (height shrinks left→right):
+        // bbox top is the canvas top, bottom edge is the diagonal.
+        // top-left, top-right, bottom-left
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x, y + h);
+      } else {
+        // slope-down-ceil: ceiling growing left→right
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x + w, y + h);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
       break;
     }
     case "platform": {

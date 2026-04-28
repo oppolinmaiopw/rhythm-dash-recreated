@@ -21,6 +21,10 @@ export type ObstacleType =
   | "tall"
   | "block-ceil"
   | "tall-ceil"
+  | "slope-up"        // floor slope rising left→right (1 tile wide, 1 tile tall)
+  | "slope-down"      // floor slope falling left→right
+  | "slope-up-ceil"   // ceiling slope descending left→right (hangs from ceiling)
+  | "slope-down-ceil" // ceiling slope ascending left→right
   | "platform"
   | "portal-grav"
   | "pad"
@@ -191,20 +195,51 @@ function buildUfo(ctx: BuildCtx, lengthTiles: number): number {
 
 function buildWave(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
-  // Tight sawtooth — alternate floor/ceiling tall blocks with small gaps
-  const gap = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 3;
-  let x = ctx.cursor + 4;
-  let top = false;
+  // Wave gameplay = diagonal 45° hold/release through tight slope corridors.
+  // We build pairs of floor + ceiling slopes that funnel the wave up and down.
+  // Difficulty controls corridor tightness (vertical gap between floor & ceiling).
+  let x = ctx.cursor + 2;
+  // floorH = current floor block height (tiles); ceilH = current ceiling block height (tiles).
+  // Playfield is ~7 tiles tall above ground. Keep floor+ceil <= playfield - gap.
+  const playH = 7;
+  const minGap = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 2;
+  let floorH = 0;
+  let ceilH = 0;
+
   while (x < end - 4) {
-    if (top) {
-      ctx.out.push({ x, type: "tall-ceil" });
-      ctx.out.push({ x: x + 1, type: "tall-ceil" });
+    const r = ctx.rand();
+    // Choose a target floor/ceiling height that respects the min vertical gap.
+    const maxFloor = Math.max(0, playH - minGap - ceilH);
+    const maxCeil = Math.max(0, playH - minGap - floorH);
+
+    if (r < 0.35) {
+      // Ramp the floor UP by 1 tile via a slope, mirror with falling ceiling.
+      const newFloor = Math.min(maxFloor, floorH + 1);
+      const newCeil = Math.max(0, ceilH - 1);
+      if (newFloor > floorH) ctx.out.push({ x, type: "slope-up", y: floorH });
+      if (newCeil < ceilH) ctx.out.push({ x, type: "slope-up-ceil", y: ceilH });
+      floorH = newFloor;
+      ceilH = newCeil;
+      x += 1;
+    } else if (r < 0.7) {
+      // Ramp the floor DOWN by 1 tile, ceiling rises.
+      const newFloor = Math.max(0, floorH - 1);
+      const newCeil = Math.min(maxCeil, ceilH + 1);
+      if (newFloor < floorH) ctx.out.push({ x, type: "slope-down", y: floorH });
+      if (newCeil > ceilH) ctx.out.push({ x, type: "slope-down-ceil", y: ceilH });
+      floorH = newFloor;
+      ceilH = newCeil;
+      x += 1;
     } else {
-      ctx.out.push({ x, type: "tall" });
-      ctx.out.push({ x: x + 1, type: "tall" });
+      // Flat corridor segment using stacked tall blocks (matching current heights).
+      // Render flat floor/ceiling blocks of current heights for 1-2 tiles.
+      const span = 1 + Math.floor(ctx.rand() * 2);
+      for (let i = 0; i < span; i++) {
+        if (floorH >= 1) ctx.out.push({ x: x + i, type: floorH >= 2 ? "tall" : "block" });
+        if (ceilH >= 1) ctx.out.push({ x: x + i, type: ceilH >= 2 ? "tall-ceil" : "block-ceil" });
+      }
+      x += span;
     }
-    x += gap + 2;
-    top = !top;
   }
   return end;
 }
