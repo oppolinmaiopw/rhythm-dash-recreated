@@ -1180,6 +1180,48 @@ function drawObstacle(
       ctx.fillText("$", cx, cy + 1);
       break;
     }
+    case "slope-up":
+    case "slope-down":
+    case "slope-up-ceil":
+    case "slope-down-ceil": {
+      // The collision rect spans the full triangle bounding box.
+      // We render a filled triangle inside (x,y,w,h).
+      // Determine triangle orientation by type.
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      if (type === "slope-up") {
+        // floor going up: bottom-left, bottom-right, top-right
+        ctx.moveTo(x, y + h);
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x + w, y);
+      } else if (type === "slope-down") {
+        // floor going down: top-left, bottom-left, bottom-right
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + h);
+        ctx.lineTo(x + w, y + h);
+      } else if (type === "slope-up-ceil") {
+        // ceiling slope falling away (height shrinks left→right):
+        // bbox top is the canvas top, bottom edge is the diagonal.
+        // top-left, top-right, bottom-left
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x, y + h);
+      } else {
+        // slope-down-ceil: ceiling growing left→right
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x + w, y + h);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      break;
+    }
     case "platform": {
       ctx.fillStyle = accent;
       ctx.shadowColor = accent;
