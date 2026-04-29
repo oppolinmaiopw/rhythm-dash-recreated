@@ -244,17 +244,24 @@ function buildWave(ctx: BuildCtx, lengthTiles: number): number {
         x += 1;
       }
     } else {
-      // Short flat plateau using stacked tall blocks at current heights.
-      const span = 1 + Math.floor(ctx.rand() * 2);
-      for (let i = 0; i < span; i++) {
-        for (let f = 0; f < floorH; f++) {
-          ctx.out.push({ x: x + i, type: f === 0 && floorH === 1 ? "block" : "tall" });
-        }
-        for (let c = 0; c < ceilH; c++) {
-          ctx.out.push({ x: x + i, type: c === 0 && ceilH === 1 ? "block-ceil" : "tall-ceil" });
+      // Brief pause: small notch — quick down-then-up pulse with min ramp.
+      const pulse = 1;
+      if (floorH >= pulse) {
+        ctx.out.push({ x, type: "slope-down", y: floorH, h: pulse });
+        ctx.out.push({ x: x + pulse, type: "slope-up", y: floorH - pulse, h: pulse });
+        x += pulse * 2;
+      } else {
+        // Force an up ramp instead
+        const headroom = Math.max(0, playH - minGap - ceilH - floorH);
+        const rise = Math.min(2, headroom);
+        if (rise >= 1) {
+          ctx.out.push({ x, type: "slope-up", y: floorH, h: rise });
+          floorH += rise;
+          x += rise;
+        } else {
+          x += 1;
         }
       }
-      x += span;
     }
   }
   return end;
