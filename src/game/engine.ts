@@ -793,17 +793,63 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
       const base = r.obstacle.y ?? 0;
       const hT = Math.max(1, r.obstacle.h ?? 1);
       const widthPx = hT * TILE;
+      const rampPx = hT * TILE;
+      const basePx = base * TILE;
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 18;
       if (t === "slope-up") {
-        // bbox: from ground up to (base+hT) tiles, width = hT tiles.
-        const top = groundTopForDraw - (base + hT) * TILE;
-        drawObstacle(ctx, t, ox, top, widthPx, (base + hT) * TILE, accent);
+        // Base rect (height = base tiles), then triangle climbing rampPx over widthPx.
+        const baseTop = groundTopForDraw - basePx;
+        if (basePx > 0) ctx.fillRect(ox, baseTop, widthPx, basePx);
+        ctx.beginPath();
+        ctx.moveTo(ox, baseTop);
+        ctx.lineTo(ox + widthPx, baseTop);
+        ctx.lineTo(ox + widthPx, baseTop - rampPx);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else if (t === "slope-down") {
-        const top = groundTopForDraw - base * TILE;
-        drawObstacle(ctx, t, ox, top, widthPx, base * TILE, accent);
+        // Triangle descending: top-left at base height, falls to right.
+        const baseTop = groundTopForDraw - basePx;
+        ctx.beginPath();
+        ctx.moveTo(ox, baseTop);
+        ctx.lineTo(ox, groundTopForDraw);
+        ctx.lineTo(ox + widthPx, groundTopForDraw);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else if (t === "slope-up-ceil") {
-        drawObstacle(ctx, t, ox, 0, widthPx, base * TILE, accent);
+        // Ceiling slope shrinking: full base on left, tapers to zero on right.
+        ctx.beginPath();
+        ctx.moveTo(ox, 0);
+        ctx.lineTo(ox + widthPx, 0);
+        ctx.lineTo(ox, basePx);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else {
-        drawObstacle(ctx, t, ox, 0, widthPx, (base + hT) * TILE, accent);
+        // slope-down-ceil: ceiling growing left→right.
+        if (basePx > 0) ctx.fillRect(ox, 0, widthPx, basePx);
+        ctx.beginPath();
+        ctx.moveTo(ox, basePx);
+        ctx.lineTo(ox + widthPx, basePx);
+        ctx.lineTo(ox + widthPx, basePx + rampPx);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
       continue;
     }
