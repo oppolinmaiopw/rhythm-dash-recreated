@@ -340,22 +340,25 @@ function obstacleRects(state: GameState): ObstacleRect[] {
       }
       case "slope-up":
       case "slope-down": {
-        // Triangular floor ramp 1 tile wide.
-        // slope-up: top edge rises from y=baseTiles at left to baseTiles+1 at right.
-        // slope-down: top edge falls from y=baseTiles at left to baseTiles-1 at right.
+        // 45° floor ramp spanning `hTiles` tiles wide and `hTiles` tiles tall.
+        // slope-up: top edge rises from y=baseTiles at left to baseTiles+hTiles at right.
+        // slope-down: top edge falls from y=baseTiles at left to baseTiles-hTiles at right.
         const baseTiles = o.y ?? 0;
-        const STEPS = 6;
+        const hTiles = Math.max(1, o.h ?? 1);
+        const widthPx = hTiles * TILE;
+        const STEPS = 6 * hTiles;
         for (let i = 0; i < STEPS; i++) {
           const t0 = i / STEPS;
           const t1 = (i + 1) / STEPS;
           const tMax = Math.max(t0, t1);
+          const tMin = Math.min(t0, t1);
           // Use the higher (more conservative) end so the player can't clip into the slope.
           const heightTiles = o.type === "slope-up"
-            ? baseTiles + tMax
-            : baseTiles - Math.min(t0, t1);
+            ? baseTiles + tMax * hTiles
+            : baseTiles - tMin * hTiles;
           rects.push({
-            left: ox + i * (TILE / STEPS),
-            right: ox + (i + 1) * (TILE / STEPS),
+            left: ox + i * (widthPx / STEPS),
+            right: ox + (i + 1) * (widthPx / STEPS),
             top: groundTop - heightTiles * TILE,
             bottom: groundTop,
             lethal: false, landable: true, obstacle: o,
@@ -365,23 +368,22 @@ function obstacleRects(state: GameState): ObstacleRect[] {
       }
       case "slope-up-ceil":
       case "slope-down-ceil": {
-        // Ceiling ramp: hangs from top of playfield.
-        // slope-up-ceil: bottom edge descends from y=baseTiles at left to baseTiles-1 at right
-        //   (i.e. ceiling block height shrinks left→right) — actually we want it to fall away
-        //   to mirror floor going up. We'll use baseTiles falling to baseTiles-1.
-        // slope-down-ceil: bottom edge rises from baseTiles at left to baseTiles+1 at right.
+        // 45° ceiling ramp spanning `hTiles` tiles wide and `hTiles` tiles tall.
         const baseTiles = o.y ?? 0;
-        const STEPS = 6;
+        const hTiles = Math.max(1, o.h ?? 1);
+        const widthPx = hTiles * TILE;
+        const STEPS = 6 * hTiles;
         for (let i = 0; i < STEPS; i++) {
           const t0 = i / STEPS;
           const t1 = (i + 1) / STEPS;
           const tMax = Math.max(t0, t1);
+          const tMin = Math.min(t0, t1);
           const heightTiles = o.type === "slope-up-ceil"
-            ? baseTiles - Math.min(t0, t1)
-            : baseTiles + tMax;
+            ? baseTiles - tMin * hTiles
+            : baseTiles + tMax * hTiles;
           rects.push({
-            left: ox + i * (TILE / STEPS),
-            right: ox + (i + 1) * (TILE / STEPS),
+            left: ox + i * (widthPx / STEPS),
+            right: ox + (i + 1) * (widthPx / STEPS),
             top: 0,
             bottom: heightTiles * TILE,
             lethal: false, landable: true, obstacle: o,
