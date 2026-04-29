@@ -196,48 +196,63 @@ function buildUfo(ctx: BuildCtx, lengthTiles: number): number {
 
 function buildWave(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
-  // Wave gameplay = diagonal 45° hold/release through tight slope corridors.
-  // We build pairs of floor + ceiling slopes that funnel the wave up and down.
-  // Difficulty controls corridor tightness (vertical gap between floor & ceiling).
+  // Wave gameplay = diagonal 45° hold/release through tall slope corridors.
+  // Slopes rise/fall by `h` tiles over `h` tiles of width (true 45°).
+  // Difficulty controls corridor tightness (vertical gap) and ramp height.
   let x = ctx.cursor + 2;
-  // floorH = current floor block height (tiles); ceilH = current ceiling block height (tiles).
-  // Playfield is ~7 tiles tall above ground. Keep floor+ceil <= playfield - gap.
-  const playH = 7;
-  const minGap = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 2;
+  const playH = 9; // taller playfield budget so ramps can really climb
+  const minGap = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 3;
+  // Ramp size: how many tiles tall each slope is. Bigger = more dramatic gameplay.
+  const rampMin = ctx.difficulty === 1 ? 2 : 2;
+  const rampMax = ctx.difficulty === 1 ? 3 : ctx.difficulty === 2 ? 4 : 4;
   let floorH = 0;
   let ceilH = 0;
 
   while (x < end - 4) {
     const r = ctx.rand();
-    // Choose a target floor/ceiling height that respects the min vertical gap.
-    const maxFloor = Math.max(0, playH - minGap - ceilH);
-    const maxCeil = Math.max(0, playH - minGap - floorH);
+    const ramp = rampMin + Math.floor(ctx.rand() * (rampMax - rampMin + 1));
 
-    if (r < 0.35) {
-      // Ramp the floor UP by 1 tile via a slope, mirror with falling ceiling.
-      const newFloor = Math.min(maxFloor, floorH + 1);
-      const newCeil = Math.max(0, ceilH - 1);
-      if (newFloor > floorH) ctx.out.push({ x, type: "slope-up", y: floorH });
-      if (newCeil < ceilH) ctx.out.push({ x, type: "slope-up-ceil", y: ceilH });
-      floorH = newFloor;
-      ceilH = newCeil;
-      x += 1;
-    } else if (r < 0.7) {
-      // Ramp the floor DOWN by 1 tile, ceiling rises.
-      const newFloor = Math.max(0, floorH - 1);
-      const newCeil = Math.min(maxCeil, ceilH + 1);
-      if (newFloor < floorH) ctx.out.push({ x, type: "slope-down", y: floorH });
-      if (newCeil > ceilH) ctx.out.push({ x, type: "slope-down-ceil", y: ceilH });
-      floorH = newFloor;
-      ceilH = newCeil;
-      x += 1;
+    if (r < 0.45) {
+      // Floor ramps UP by `ramp` tiles (width = ramp). Ceiling drops to mirror.
+      const headroom = Math.max(0, playH - minGap - ceilH - floorH);
+      const rise = Math.min(ramp, headroom);
+      if (rise >= 1) {
+        ctx.out.push({ x, type: "slope-up", y: floorH, h: rise });
+        // Ceiling mirror — slope falls away by same amount (if ceiling has height).
+        const drop = Math.min(rise, ceilH);
+        if (drop >= 1) {
+          ctx.out.push({ x, type: "slope-up-ceil", y: ceilH, h: drop });
+        }
+        floorH += rise;
+        ceilH -= drop;
+        x += rise;
+      } else {
+        x += 1;
+      }
+    } else if (r < 0.85) {
+      // Floor ramps DOWN by `ramp` tiles. Ceiling rises to mirror.
+      const headroom = Math.max(0, playH - minGap - ceilH - floorH);
+      const drop = Math.min(ramp, floorH);
+      const rise = Math.min(ramp, headroom);
+      if (drop >= 1 || rise >= 1) {
+        if (drop >= 1) ctx.out.push({ x, type: "slope-down", y: floorH, h: drop });
+        if (rise >= 1) ctx.out.push({ x, type: "slope-down-ceil", y: ceilH, h: rise });
+        floorH -= drop;
+        ceilH += rise;
+        x += Math.max(drop, rise);
+      } else {
+        x += 1;
+      }
     } else {
-      // Flat corridor segment using stacked tall blocks (matching current heights).
-      // Render flat floor/ceiling blocks of current heights for 1-2 tiles.
+      // Short flat plateau using stacked tall blocks at current heights.
       const span = 1 + Math.floor(ctx.rand() * 2);
       for (let i = 0; i < span; i++) {
-        if (floorH >= 1) ctx.out.push({ x: x + i, type: floorH >= 2 ? "tall" : "block" });
-        if (ceilH >= 1) ctx.out.push({ x: x + i, type: ceilH >= 2 ? "tall-ceil" : "block-ceil" });
+        for (let f = 0; f < floorH; f++) {
+          ctx.out.push({ x: x + i, type: f === 0 && floorH === 1 ? "block" : "tall" });
+        }
+        for (let c = 0; c < ceilH; c++) {
+          ctx.out.push({ x: x + i, type: c === 0 && ceilH === 1 ? "block-ceil" : "tall-ceil" });
+        }
       }
       x += span;
     }
