@@ -340,22 +340,25 @@ function obstacleRects(state: GameState): ObstacleRect[] {
       }
       case "slope-up":
       case "slope-down": {
-        // Triangular floor ramp 1 tile wide.
-        // slope-up: top edge rises from y=baseTiles at left to baseTiles+1 at right.
-        // slope-down: top edge falls from y=baseTiles at left to baseTiles-1 at right.
+        // 45° floor ramp spanning `hTiles` tiles wide and `hTiles` tiles tall.
+        // slope-up: top edge rises from y=baseTiles at left to baseTiles+hTiles at right.
+        // slope-down: top edge falls from y=baseTiles at left to baseTiles-hTiles at right.
         const baseTiles = o.y ?? 0;
-        const STEPS = 6;
+        const hTiles = Math.max(1, o.h ?? 1);
+        const widthPx = hTiles * TILE;
+        const STEPS = 6 * hTiles;
         for (let i = 0; i < STEPS; i++) {
           const t0 = i / STEPS;
           const t1 = (i + 1) / STEPS;
           const tMax = Math.max(t0, t1);
+          const tMin = Math.min(t0, t1);
           // Use the higher (more conservative) end so the player can't clip into the slope.
           const heightTiles = o.type === "slope-up"
-            ? baseTiles + tMax
-            : baseTiles - Math.min(t0, t1);
+            ? baseTiles + tMax * hTiles
+            : baseTiles - tMin * hTiles;
           rects.push({
-            left: ox + i * (TILE / STEPS),
-            right: ox + (i + 1) * (TILE / STEPS),
+            left: ox + i * (widthPx / STEPS),
+            right: ox + (i + 1) * (widthPx / STEPS),
             top: groundTop - heightTiles * TILE,
             bottom: groundTop,
             lethal: false, landable: true, obstacle: o,
@@ -365,23 +368,22 @@ function obstacleRects(state: GameState): ObstacleRect[] {
       }
       case "slope-up-ceil":
       case "slope-down-ceil": {
-        // Ceiling ramp: hangs from top of playfield.
-        // slope-up-ceil: bottom edge descends from y=baseTiles at left to baseTiles-1 at right
-        //   (i.e. ceiling block height shrinks left→right) — actually we want it to fall away
-        //   to mirror floor going up. We'll use baseTiles falling to baseTiles-1.
-        // slope-down-ceil: bottom edge rises from baseTiles at left to baseTiles+1 at right.
+        // 45° ceiling ramp spanning `hTiles` tiles wide and `hTiles` tiles tall.
         const baseTiles = o.y ?? 0;
-        const STEPS = 6;
+        const hTiles = Math.max(1, o.h ?? 1);
+        const widthPx = hTiles * TILE;
+        const STEPS = 6 * hTiles;
         for (let i = 0; i < STEPS; i++) {
           const t0 = i / STEPS;
           const t1 = (i + 1) / STEPS;
           const tMax = Math.max(t0, t1);
+          const tMin = Math.min(t0, t1);
           const heightTiles = o.type === "slope-up-ceil"
-            ? baseTiles - Math.min(t0, t1)
-            : baseTiles + tMax;
+            ? baseTiles - tMin * hTiles
+            : baseTiles + tMax * hTiles;
           rects.push({
-            left: ox + i * (TILE / STEPS),
-            right: ox + (i + 1) * (TILE / STEPS),
+            left: ox + i * (widthPx / STEPS),
+            right: ox + (i + 1) * (widthPx / STEPS),
             top: 0,
             bottom: heightTiles * TILE,
             lethal: false, landable: true, obstacle: o,
@@ -789,16 +791,65 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
       drawnSlopes.add(r.obstacle);
       const ox = r.obstacle.x * TILE - state.scrollX;
       const base = r.obstacle.y ?? 0;
+      const hT = Math.max(1, r.obstacle.h ?? 1);
+      const widthPx = hT * TILE;
+      const rampPx = hT * TILE;
+      const basePx = base * TILE;
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 18;
       if (t === "slope-up") {
-        const top = groundTopForDraw - (base + 1) * TILE;
-        drawObstacle(ctx, t, ox, top, TILE, (base + 1) * TILE, accent);
+        // Base rect (height = base tiles), then triangle climbing rampPx over widthPx.
+        const baseTop = groundTopForDraw - basePx;
+        if (basePx > 0) ctx.fillRect(ox, baseTop, widthPx, basePx);
+        ctx.beginPath();
+        ctx.moveTo(ox, baseTop);
+        ctx.lineTo(ox + widthPx, baseTop);
+        ctx.lineTo(ox + widthPx, baseTop - rampPx);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else if (t === "slope-down") {
-        const top = groundTopForDraw - base * TILE;
-        drawObstacle(ctx, t, ox, top, TILE, base * TILE, accent);
+        // Triangle descending: top-left at base height, falls to right.
+        const baseTop = groundTopForDraw - basePx;
+        ctx.beginPath();
+        ctx.moveTo(ox, baseTop);
+        ctx.lineTo(ox, groundTopForDraw);
+        ctx.lineTo(ox + widthPx, groundTopForDraw);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else if (t === "slope-up-ceil") {
-        drawObstacle(ctx, t, ox, 0, TILE, base * TILE, accent);
+        // Ceiling slope shrinking: full base on left, tapers to zero on right.
+        ctx.beginPath();
+        ctx.moveTo(ox, 0);
+        ctx.lineTo(ox + widthPx, 0);
+        ctx.lineTo(ox, basePx);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       } else {
-        drawObstacle(ctx, t, ox, 0, TILE, (base + 1) * TILE, accent);
+        // slope-down-ceil: ceiling growing left→right.
+        if (basePx > 0) ctx.fillRect(ox, 0, widthPx, basePx);
+        ctx.beginPath();
+        ctx.moveTo(ox, basePx);
+        ctx.lineTo(ox + widthPx, basePx);
+        ctx.lineTo(ox + widthPx, basePx + rampPx);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
       continue;
     }
