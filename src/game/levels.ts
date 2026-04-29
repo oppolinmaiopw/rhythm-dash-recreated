@@ -41,7 +41,8 @@ export type ObstacleType =
 export interface Obstacle {
   x: number;
   type: ObstacleType;
-  y?: number; // for platform: tiles above ground
+  y?: number; // for platform: tiles above ground; for slopes: base height in tiles
+  h?: number; // for slopes: rise in tiles (also = width in tiles for 45°). Default 1.
 }
 
 export type DecorationTheme =
