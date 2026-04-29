@@ -794,10 +794,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
       const hT = Math.max(1, r.obstacle.h ?? 1);
       const widthPx = hT * TILE;
       if (t === "slope-up") {
-        // bbox spans from baseTiles to baseTiles+hT in height
+        // bbox: from ground up to (base+hT) tiles, width = hT tiles.
         const top = groundTopForDraw - (base + hT) * TILE;
-        drawObstacle(ctx, t, ox, top, widthPx, (base + hT) * TILE - (groundTopForDraw - (groundTopForDraw - base * TILE - hT * TILE) - groundTopForDraw + groundTopForDraw), accent);
-        // simpler: bbox height = hT * TILE (the rising portion); but to keep base block too:
+        drawObstacle(ctx, t, ox, top, widthPx, (base + hT) * TILE, accent);
       } else if (t === "slope-down") {
         const top = groundTopForDraw - base * TILE;
         drawObstacle(ctx, t, ox, top, widthPx, base * TILE, accent);
