@@ -791,16 +791,20 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, accent: 
       drawnSlopes.add(r.obstacle);
       const ox = r.obstacle.x * TILE - state.scrollX;
       const base = r.obstacle.y ?? 0;
+      const hT = Math.max(1, r.obstacle.h ?? 1);
+      const widthPx = hT * TILE;
       if (t === "slope-up") {
-        const top = groundTopForDraw - (base + 1) * TILE;
-        drawObstacle(ctx, t, ox, top, TILE, (base + 1) * TILE, accent);
+        // bbox spans from baseTiles to baseTiles+hT in height
+        const top = groundTopForDraw - (base + hT) * TILE;
+        drawObstacle(ctx, t, ox, top, widthPx, (base + hT) * TILE - (groundTopForDraw - (groundTopForDraw - base * TILE - hT * TILE) - groundTopForDraw + groundTopForDraw), accent);
+        // simpler: bbox height = hT * TILE (the rising portion); but to keep base block too:
       } else if (t === "slope-down") {
         const top = groundTopForDraw - base * TILE;
-        drawObstacle(ctx, t, ox, top, TILE, base * TILE, accent);
+        drawObstacle(ctx, t, ox, top, widthPx, base * TILE, accent);
       } else if (t === "slope-up-ceil") {
-        drawObstacle(ctx, t, ox, 0, TILE, base * TILE, accent);
+        drawObstacle(ctx, t, ox, 0, widthPx, base * TILE, accent);
       } else {
-        drawObstacle(ctx, t, ox, 0, TILE, (base + 1) * TILE, accent);
+        drawObstacle(ctx, t, ox, 0, widthPx, (base + hT) * TILE, accent);
       }
       continue;
     }
