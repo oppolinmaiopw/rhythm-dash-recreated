@@ -77,44 +77,74 @@ export interface LevelDef {
 
 type ModeKey = "cube" | "ship" | "ball" | "ufo" | "wave" | "robot" | "spider" | "swing";
 
+// A "variant" gives a segment its own personality. Every level picks its own so
+// that no two levels play the same, even when they use the same gamemode.
+export type Variant =
+  | "classic"   // balanced mix
+  | "spikes"    // spike-forward, rhythmic single taps
+  | "stairs"    // block/tall climbing structures
+  | "pads"      // jump pads and launches
+  | "tight"     // minimum feasible spacing, high pressure
+  | "corridor"  // long floor/ceiling tunnels
+  | "zigzag"    // constant surface swapping
+  | "open";     // airy, breathing room, coin runs
+
 interface BuildCtx {
   out: Obstacle[];
   cursor: number;
   rand: () => number;
   difficulty: 1 | 2 | 3;
+  variant: Variant;
 }
 
 function pushCoinLine(ctx: BuildCtx, fromX: number, toX: number, yTile: number, step = 2) {
   for (let x = fromX; x < toX; x += step) ctx.out.push({ x, type: "coin", y: yTile });
 }
 
+// ---------------------------------------------------------------------------
+// Feasibility notes (verified with the headless solver in this repo):
+//  * Cube jump arc covers ~6.3 tiles of ground before landing, so two ground
+//    hazards must sit at least 8 tiles apart to be clearable in sequence.
+//  * Robot held jump covers ~10 tiles, so its pits can be much wider.
+// ---------------------------------------------------------------------------
+const CUBE_SAFE_GAP = 8;
+
 function buildCube(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
-  // Density: spacing between obstacles.
-  const minGap = ctx.difficulty === 1 ? 7 : ctx.difficulty === 2 ? 6 : 5;
+  const base =
+    ctx.variant === "tight" ? CUBE_SAFE_GAP :
+    ctx.variant === "open" ? CUBE_SAFE_GAP + 4 :
+    CUBE_SAFE_GAP + (ctx.difficulty === 3 ? 0 : ctx.difficulty === 2 ? 1 : 2);
   let x = ctx.cursor + 4;
-  while (x < end - 4) {
+  while (x < end - 6) {
     const r = ctx.rand();
-    if (r < 0.5) {
+    // Variant-weighted pattern selection.
+    let pick: "spike" | "spike3" | "blocks" | "tower" | "pad";
+    if (ctx.variant === "spikes") pick = r < 0.7 ? "spike" : "spike3";
+    else if (ctx.variant === "stairs") pick = r < 0.55 ? "blocks" : r < 0.85 ? "tower" : "spike";
+    else if (ctx.variant === "pads") pick = r < 0.45 ? "pad" : r < 0.75 ? "spike" : "tower";
+    else if (ctx.variant === "open") pick = r < 0.6 ? "spike" : r < 0.8 ? "blocks" : "pad";
+    else pick = r < 0.42 ? "spike" : r < 0.62 ? "spike3" : r < 0.8 ? "blocks" : r < 0.92 ? "tower" : "pad";
+
+    if (pick === "spike") {
       ctx.out.push({ x, type: "spike" });
       pushCoinLine(ctx, x - 2, x, 3);
-      x += minGap;
-    } else if (r < 0.75) {
+      x += base;
+    } else if (pick === "spike3") {
       ctx.out.push({ x, type: "spike3" });
-      x += minGap + 3;
-    } else if (r < 0.88) {
+      x += base + 4;
+    } else if (pick === "blocks") {
       ctx.out.push({ x, type: "block" });
       ctx.out.push({ x: x + 1, type: "block" });
-      ctx.out.push({ x: x + 4, type: "spike" });
-      x += minGap + 4;
-    } else if (r < 0.96) {
+      x += base + 3;
+    } else if (pick === "tower") {
       ctx.out.push({ x, type: "tall" });
-      ctx.out.push({ x: x + 5, type: "spike" });
-      x += minGap + 5;
+      pushCoinLine(ctx, x - 2, x, 4);
+      x += base + 4;
     } else {
       ctx.out.push({ x, type: "pad" });
-      ctx.out.push({ x: x + 4, type: "tall" });
-      x += minGap + 6;
+      ctx.out.push({ x: x + 6, type: "tall" });
+      x += base + 8;
     }
   }
   return end;
@@ -122,29 +152,31 @@ function buildCube(ctx: BuildCtx, lengthTiles: number): number {
 
 function buildShip(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
-  // Ship corridors: opposing floor + ceiling obstacles forming gaps.
-  const gapTiles = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 3;
+  const gapTiles = ctx.variant === "tight" ? 2 : ctx.variant === "open" ? 5 : ctx.difficulty === 1 ? 4 : 3;
   let x = ctx.cursor + 4;
-  while (x < end - 4) {
+  while (x < end - 5) {
     const r = ctx.rand();
-    if (r < 0.55) {
-      // tall floor block + hanging ceiling block forming a gap
+    const pick =
+      ctx.variant === "corridor" ? (r < 0.75 ? 0 : 2) :
+      ctx.variant === "spikes" ? (r < 0.75 ? 1 : 0) :
+      ctx.variant === "open" ? (r < 0.7 ? 0 : 1) :
+      r < 0.55 ? 0 : r < 0.8 ? 1 : 2;
+
+    if (pick === 0) {
       ctx.out.push({ x, type: "tall" });
       ctx.out.push({ x: x + 3, type: "tall-ceil" });
       pushCoinLine(ctx, x - 1, x + 5, 3);
       x += gapTiles + 6;
-    } else if (r < 0.8) {
-      // floor spikes you must rise over, then ceiling spikes you must dip under
+    } else if (pick === 1) {
       ctx.out.push({ x, type: "spike3" });
       ctx.out.push({ x: x + 5, type: "spike3-ceil" });
-      x += gapTiles + 7;
+      x += gapTiles + 8;
     } else {
-      // pinch: tall on both sides
       ctx.out.push({ x, type: "block" });
       ctx.out.push({ x: x + 1, type: "block-ceil" });
       ctx.out.push({ x: x + 4, type: "tall-ceil" });
-      ctx.out.push({ x: x + 6, type: "tall" });
-      x += gapTiles + 8;
+      ctx.out.push({ x: x + 7, type: "tall" });
+      x += gapTiles + 10;
     }
   }
   return end;
@@ -152,43 +184,51 @@ function buildShip(ctx: BuildCtx, lengthTiles: number): number {
 
 function buildBall(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
-  const minGap = ctx.difficulty === 1 ? 8 : ctx.difficulty === 2 ? 7 : 6;
+  const minGap =
+    ctx.variant === "tight" ? 6 :
+    ctx.variant === "open" ? 10 :
+    ctx.difficulty === 1 ? 9 : ctx.difficulty === 2 ? 8 : 7;
   let x = ctx.cursor + 4;
   let onCeiling = false;
-  while (x < end - 4) {
+  while (x < end - 5) {
     if (onCeiling) {
       ctx.out.push({ x, type: "spike-ceil" });
-      ctx.out.push({ x: x + 2, type: "spike-ceil" });
+      if (ctx.variant !== "open") ctx.out.push({ x: x + 2, type: "spike-ceil" });
     } else {
       ctx.out.push({ x, type: "spike" });
-      ctx.out.push({ x: x + 2, type: "spike" });
+      if (ctx.variant !== "open") ctx.out.push({ x: x + 2, type: "spike" });
     }
     pushCoinLine(ctx, x - 1, x + 3, onCeiling ? 5 : 1);
     x += minGap;
-    if (ctx.rand() < 0.5) onCeiling = !onCeiling;
+    if (ctx.variant === "zigzag" || ctx.rand() < 0.5) onCeiling = !onCeiling;
   }
   return end;
 }
 
 function buildUfo(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
+  const pad = ctx.variant === "tight" ? 0 : ctx.variant === "open" ? 3 : 1;
   let x = ctx.cursor + 4;
-  while (x < end - 4) {
+  while (x < end - 5) {
     const r = ctx.rand();
-    if (r < 0.6) {
-      // stairs of tall blocks requiring repeated flaps
+    const pick =
+      ctx.variant === "stairs" ? (r < 0.8 ? 0 : 1) :
+      ctx.variant === "corridor" ? 0 :
+      ctx.variant === "spikes" ? (r < 0.6 ? 2 : 1) :
+      r < 0.6 ? 0 : r < 0.85 ? 1 : 2;
+
+    if (pick === 0) {
       ctx.out.push({ x, type: "tall" });
       ctx.out.push({ x: x + 3, type: "tall-ceil" });
       pushCoinLine(ctx, x - 1, x + 4, 3);
-      x += 7;
-    } else if (r < 0.85) {
-      // ceiling overhang
+      x += 7 + pad;
+    } else if (pick === 1) {
       ctx.out.push({ x, type: "block-ceil" });
       ctx.out.push({ x: x + 4, type: "spike" });
-      x += 8;
+      x += 8 + pad;
     } else {
       ctx.out.push({ x, type: "spike3-ceil" });
-      x += 8;
+      x += 8 + pad;
     }
   }
   return end;
@@ -197,14 +237,11 @@ function buildUfo(ctx: BuildCtx, lengthTiles: number): number {
 function buildWave(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
   // Wave gameplay = diagonal 45° hold/release through tall slope corridors.
-  // Slopes rise/fall by `h` tiles over `h` tiles of width (true 45°).
-  // Difficulty controls corridor tightness (vertical gap) and ramp height.
   let x = ctx.cursor + 2;
-  const playH = 9; // taller playfield budget so ramps can really climb
-  const minGap = ctx.difficulty === 1 ? 4 : ctx.difficulty === 2 ? 3 : 3;
-  // Ramp size: how many tiles tall each slope is. Bigger = more dramatic gameplay.
-  const rampMin = ctx.difficulty === 1 ? 2 : 2;
-  const rampMax = ctx.difficulty === 1 ? 3 : ctx.difficulty === 2 ? 4 : 4;
+  const playH = 9;
+  const minGap = ctx.variant === "tight" ? 3 : ctx.variant === "open" ? 5 : ctx.difficulty === 1 ? 4 : 3;
+  const rampMin = ctx.variant === "tight" ? 3 : 2;
+  const rampMax = ctx.variant === "open" ? 3 : ctx.difficulty === 1 ? 3 : 4;
   let floorH = 0;
   let ceilH = 0;
 
@@ -213,24 +250,17 @@ function buildWave(ctx: BuildCtx, lengthTiles: number): number {
     const ramp = rampMin + Math.floor(ctx.rand() * (rampMax - rampMin + 1));
 
     if (r < 0.45) {
-      // Floor ramps UP by `ramp` tiles (width = ramp). Ceiling drops to mirror.
       const headroom = Math.max(0, playH - minGap - ceilH - floorH);
       const rise = Math.min(ramp, headroom);
       if (rise >= 1) {
         ctx.out.push({ x, type: "slope-up", y: floorH, h: rise });
-        // Ceiling mirror — slope falls away by same amount (if ceiling has height).
         const drop = Math.min(rise, ceilH);
-        if (drop >= 1) {
-          ctx.out.push({ x, type: "slope-up-ceil", y: ceilH, h: drop });
-        }
+        if (drop >= 1) ctx.out.push({ x, type: "slope-up-ceil", y: ceilH, h: drop });
         floorH += rise;
         ceilH -= drop;
         x += rise;
-      } else {
-        x += 1;
-      }
+      } else x += 1;
     } else if (r < 0.85) {
-      // Floor ramps DOWN by `ramp` tiles. Ceiling rises to mirror.
       const headroom = Math.max(0, playH - minGap - ceilH - floorH);
       const drop = Math.min(ramp, floorH);
       const rise = Math.min(ramp, headroom);
@@ -240,27 +270,21 @@ function buildWave(ctx: BuildCtx, lengthTiles: number): number {
         floorH -= drop;
         ceilH += rise;
         x += Math.max(drop, rise);
-      } else {
-        x += 1;
-      }
+      } else x += 1;
     } else {
-      // Brief pause: small notch — quick down-then-up pulse with min ramp.
       const pulse = 1;
       if (floorH >= pulse) {
         ctx.out.push({ x, type: "slope-down", y: floorH, h: pulse });
         ctx.out.push({ x: x + pulse, type: "slope-up", y: floorH - pulse, h: pulse });
         x += pulse * 2;
       } else {
-        // Force an up ramp instead
         const headroom = Math.max(0, playH - minGap - ceilH - floorH);
         const rise = Math.min(2, headroom);
         if (rise >= 1) {
           ctx.out.push({ x, type: "slope-up", y: floorH, h: rise });
           floorH += rise;
           x += rise;
-        } else {
-          x += 1;
-        }
+        } else x += 1;
       }
     }
   }
@@ -269,26 +293,32 @@ function buildWave(ctx: BuildCtx, lengthTiles: number): number {
 
 function buildRobot(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
+  const pad = ctx.variant === "tight" ? 0 : ctx.variant === "open" ? 3 : 1;
   let x = ctx.cursor + 4;
-  while (x < end - 4) {
+  while (x < end - 6) {
     const r = ctx.rand();
-    if (r < 0.55) {
-      // wide spike pit — needs held jump
+    const pick =
+      ctx.variant === "spikes" ? 0 :
+      ctx.variant === "stairs" ? 1 :
+      ctx.variant === "pads" ? (r < 0.6 ? 2 : 0) :
+      r < 0.55 ? 0 : r < 0.85 ? 1 : 2;
+
+    if (pick === 0) {
+      // wide spike pit — needs a held jump
       ctx.out.push({ x, type: "spike3" });
       ctx.out.push({ x: x + 3, type: "spike3" });
       pushCoinLine(ctx, x, x + 6, 4);
-      x += 10;
-    } else if (r < 0.85) {
-      // tall + landing block + spike — held jump up to platform
+      x += 11 + pad;
+    } else if (pick === 1) {
       ctx.out.push({ x, type: "spike" });
-      ctx.out.push({ x: x + 4, type: "tall" });
-      ctx.out.push({ x: x + 8, type: "spike3" });
-      x += 12;
+      ctx.out.push({ x: x + 5, type: "tall" });
+      ctx.out.push({ x: x + 10, type: "spike3" });
+      x += 15 + pad;
     } else {
       ctx.out.push({ x, type: "pad" });
-      ctx.out.push({ x: x + 5, type: "tall" });
-      ctx.out.push({ x: x + 8, type: "spike" });
-      x += 11;
+      ctx.out.push({ x: x + 6, type: "tall" });
+      ctx.out.push({ x: x + 10, type: "spike" });
+      x += 14 + pad;
     }
   }
   return end;
@@ -296,40 +326,44 @@ function buildRobot(ctx: BuildCtx, lengthTiles: number): number {
 
 function buildSpider(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
-  const minGap = ctx.difficulty === 1 ? 6 : ctx.difficulty === 2 ? 5 : 4;
+  const minGap =
+    ctx.variant === "tight" ? 5 :
+    ctx.variant === "open" ? 9 :
+    ctx.difficulty === 1 ? 8 : ctx.difficulty === 2 ? 7 : 6;
   let x = ctx.cursor + 4;
   let top = false;
-  while (x < end - 4) {
-    if (top) {
-      ctx.out.push({ x, type: "spike3-ceil" });
-    } else {
-      ctx.out.push({ x, type: "spike3" });
+  while (x < end - 5) {
+    ctx.out.push({ x, type: top ? "spike3-ceil" : "spike3" });
+    if (ctx.variant === "spikes") {
+      ctx.out.push({ x: x + minGap - 1, type: top ? "spike" : "spike-ceil" });
     }
-    x += minGap + 2;
-    top = !top;
+    x += minGap + 3;
+    if (ctx.variant === "zigzag" || ctx.rand() < 0.75) top = !top;
   }
   return end;
 }
 
 function buildSwing(ctx: BuildCtx, lengthTiles: number): number {
   const end = ctx.cursor + lengthTiles;
+  const pad = ctx.variant === "tight" ? 0 : ctx.variant === "open" ? 3 : 1;
   let x = ctx.cursor + 4;
-  while (x < end - 4) {
+  while (x < end - 5) {
     const r = ctx.rand();
-    if (r < 0.6) {
-      // two walls forming a flip-required corridor
+    const pick = ctx.variant === "corridor" ? 0 : ctx.variant === "spikes" ? 1 : r < 0.6 ? 0 : 1;
+    if (pick === 0) {
       ctx.out.push({ x, type: "tall" });
       ctx.out.push({ x: x + 4, type: "tall-ceil" });
       pushCoinLine(ctx, x - 1, x + 5, 3);
-      x += 8;
+      x += 9 + pad;
     } else {
       ctx.out.push({ x, type: "spike3-ceil" });
-      ctx.out.push({ x: x + 4, type: "spike3" });
-      x += 9;
+      ctx.out.push({ x: x + 5, type: "spike3" });
+      x += 11 + pad;
     }
   }
   return end;
 }
+
 
 const BUILDERS: Record<ModeKey, (ctx: BuildCtx, len: number) => number> = {
   cube: buildCube,
